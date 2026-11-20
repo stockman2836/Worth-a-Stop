@@ -32,31 +32,55 @@ export async function findSources(city, { refresh = false, storage, fetchRespons
   try {
     const saved = JSON.parse(storage?.getItem(key) ?? 'null');
     if (saved && Number.isFinite(saved.checkedAt) && saved.checkedAt >= 0 && saved.checkedAt <= Date.now()) {
-      cached = { checkedAt: saved.checkedAt, sources: readSources(saved.rows) };
+      cached = { checkedAt: saved.checkedAt, sources: readSources(saved.rows), radiusKm: saved.radiusKm ?? 5 };
     }
   } catch { /* Missing, unavailable or outdated storage can be replaced by a live result. */ }
-  if (!refresh && cached && Date.now() - cached.checkedAt < day) return { ...cached, stale: false };
+  if (!refresh && cached && (cached.sources.length || cached.radiusKm === 25) &&
+      Date.now() - cached.checkedAt < day) return { ...cached, stale: false };
 
   const group = 'originagenda_uid,originagenda_title,location_uid,location_name';
   const url = new URL(directory);
   url.search = new URLSearchParams({
-    where: `within_distance(location_coordinates,geom'POINT(${longitude} ${latitude})',5km) AND lastdate_end >= now() AND originagenda_uid IS NOT NULL AND location_uid IS NOT NULL AND originagenda_title IS NOT NULL AND location_name IS NOT NULL`,
     select: `${group},count(*) as listings`, group_by: group,
     order_by: 'listings desc,originagenda_uid,location_uid', limit: '25',
   });
 
-  try {
+  async function nearby(radiusKm) {
+    url.searchParams.set('where', `within_distance(location_coordinates,geom'POINT(${longitude} ${latitude})',${radiusKm}km) AND lastdate_end >= now() AND originagenda_uid IS NOT NULL AND location_uid IS NOT NULL AND originagenda_title IS NOT NULL AND location_name IS NOT NULL`);
     const response = await fetchResponse(url, { signal: AbortSignal.timeout(15_000) });
     if (!response.ok) throw new Error(`Calendar directory returned HTTP ${response.status}.`);
     const { results } = await response.json();
-    const sources = readSources(results);
+    return { rows: results, sources: readSources(results), radiusKm };
+  }
+  try {
+    let result = await nearby(5);
+    if (!result.sources.length) result = await nearby(25);
+    const { rows, sources, radiusKm } = result;
     const checkedAt = Date.now();
     try {
-      storage?.setItem(key, JSON.stringify({ rows: results, checkedAt }));
+      storage?.setItem(key, JSON.stringify({ rows, checkedAt, radiusKm }));
     } catch { /* A storage failure still leaves usable live results. */ }
-    return { sources, checkedAt, stale: false };
+    return { sources, checkedAt, radiusKm, stale: false };
   } catch (error) {
     if (cached) return { ...cached, stale: true };
     throw error;
   }
+}
+
+export async function featuredCities(fetchResponse = fetch) {
+  const url = new URL(directory);
+  url.search = new URLSearchParams({
+    where: 'lastdate_end >= now() AND location_city IS NOT NULL AND location_countrycode IS NOT NULL AND location_coordinates IS NOT NULL AND originagenda_uid IS NOT NULL AND location_uid IS NOT NULL',
+    group_by: 'location_city,location_countrycode',
+    select: 'location_city,location_countrycode,count(*) as listings',
+    order_by: 'listings desc,location_city', limit: '40',
+  });
+  const response = await fetchResponse(url, { signal: AbortSignal.timeout(8000) });
+  if (!response.ok) throw new Error(`City directory returned HTTP ${response.status}.`);
+  const { results } = await response.json();
+  const cities = results.filter(row => typeof row.location_city === 'string' && /^[A-Z]{2}$/.test(row.location_countrycode))
+    .map(row => ({ name: row.location_city, countryCode: row.location_countrycode }));
+  // Give each represented country a turn before filling the remaining slots.
+  const first = cities.filter((city, i) => cities.findIndex(other => other.countryCode === city.countryCode) === i);
+  return [...first, ...cities.filter(city => !first.includes(city))].slice(0, 4);
 }

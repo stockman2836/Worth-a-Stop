@@ -25,7 +25,14 @@ input { min-width: 0; flex: 1 1 15rem; padding: .9rem 1rem; border: 1px solid #8
 #status { margin: 2rem 0 0; color: #415866; }
 #results { padding: 0; list-style: none; }
 #results > li { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem 1rem; padding: 1rem 0; border-top: 1px solid #d6e0e4; }
-#results strong { flex: 1 1 10rem; }
+.city-name { flex: 1 1 10rem; text-align: left; font-weight: 650; border: 0; background: transparent; color: #16485c; padding: .35rem 0; }
+.city-name:hover, #featured button:hover { text-decoration: underline; }
+#featured { margin-top: 2rem; }
+#featured h2 { margin: 0 0 .65rem; font-size: 1rem; }
+#featured-cities, .guide-links ul { display: flex; flex-wrap: wrap; gap: .6rem 1rem; }
+#featured button { background: white; color: #16485c; border: 1px solid #9eb0b8; border-radius: 1.3rem; padding: .45rem .9rem; }
+.guide-links { margin: 1rem 0; }
+.guide-links ul { list-style: none; padding: 0; }
 .zone { font-variant-numeric: tabular-nums; color: #546770; font-size: .9rem; }
 #results details { width: 100%; }
 #results summary { cursor: pointer; color: #16485c; width: fit-content; padding-block: .35rem; }

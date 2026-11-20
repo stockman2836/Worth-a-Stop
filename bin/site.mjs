@@ -5,8 +5,10 @@ const assets = new Map([
   ['/', ['../web/index.html', 'text/html']],
   ['/site.css', ['../web/site.css', 'text/css']],
   ['/site.mjs', ['../web/site.mjs', 'text/javascript']],
+  ['/calendar-panel.mjs', ['../web/calendar-panel.mjs', 'text/javascript']],
   ['/cities.mjs', ['../src/cities.mjs', 'text/javascript']],
   ['/sources.mjs', ['../src/sources.mjs', 'text/javascript']],
+  ['/guides.mjs', ['../src/guides.mjs', 'text/javascript']],
 ]);
 
 const server = createServer(async (request, response) => {

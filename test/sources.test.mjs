@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { findSources } from '../src/sources.mjs';
+import { featuredCities, findSources } from '../src/sources.mjs';
 
 const city = { id: 12, latitude: 47.5, longitude: 19.04 };
 const row = { originagenda_uid: '80', originagenda_title: 'Arts programme', location_uid: '33', location_name: 'Galéria' };
@@ -54,4 +54,28 @@ test('a malformed directory response does not become an empty list', async () =>
   await assert.rejects(findSources(city, {
     fetchResponse: async () => Response.json({ results: [{ ...row, location_uid: null }] }),
   }), /directory entry/);
+});
+
+test('widens a successful empty inner search and keeps the actual radius on a cache hit', async () => {
+  const storage = memoryStorage();
+  const seen = [];
+  const fetchResponse = async url => {
+    const km = Number(/,(\d+)km\)/.exec(url.searchParams.get('where'))[1]);
+    seen.push(km);
+    return Response.json({ results: km === 25 ? [row] : [] });
+  };
+  const found = await findSources(city, { storage, fetchResponse });
+  assert.equal(found.radiusKm, 25);
+  assert.equal(found.sources.length, 1);
+  assert.deepEqual(await findSources(city, { storage, fetchResponse }), found);
+  assert.deepEqual(seen, [5, 25]);
+});
+
+test('suggests destinations drawn from the current directory and retains their country codes', async () => {
+  const cities = await featuredCities(async url => {
+    assert.match(url.searchParams.get('where'), /lastdate_end >= now\(\)/);
+    return Response.json({ results: [['Nantes','FR'], ['Paris','FR'], ['Genève','CH']].map(
+      ([location_city, location_countrycode]) => ({ location_city, location_countrycode })) });
+  });
+  assert.deepEqual(cities.map(city => city.countryCode), ['FR', 'CH', 'FR']);
 });

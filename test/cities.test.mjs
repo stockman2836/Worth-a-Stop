@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { searchCities } from '../src/cities.mjs';
+import { searchCities, suggestCities } from '../src/cities.mjs';
 
 test('preserves distinct settlements with the same name and skips other features', async () => {
   const place = {
@@ -57,4 +57,33 @@ test('rejects a broken coordinate before it can reach the map', async () => {
 
 test('rejects an empty query before contacting the provider', async () => {
   await assert.rejects(searchCities('  ', () => assert.fail('unexpected request')), /два символа/);
+});
+
+test('corrects a missing Cyrillic letter using real place candidates and preserves namesakes', async () => {
+  const place = { id: 1, name: 'Будапешт', latitude: 47, longitude: 19, feature_code: 'PPLC' };
+  const result = await suggestCities('Будапшт', async url => {
+    assert.equal(url.hostname, 'geocoding-api.open-meteo.com');
+    const name = url.searchParams.get('name');
+    return Response.json({ results: name === 'Будапшт' ? [] : [place, { ...place, id: 2 }] });
+  });
+  assert.equal(result.correction, 'Будапешт');
+  assert.deepEqual(result.cities.map(city => city.id), [1, 2]);
+});
+
+test('verifies a transposed spelling from Wikipedia with the geocoder and keeps the country constraint', async () => {
+  const place = { id: 1, name: 'London', latitude: 51, longitude: 0, feature_code: 'PPLC' };
+  const result = await suggestCities('Lnodon', async url => {
+    if (url.hostname === 'en.wikipedia.org') return Response.json({ query: { searchinfo: { suggestion: 'london' } } });
+    assert.equal(url.searchParams.get('countryCode'), 'GB');
+    return Response.json({ results: url.searchParams.get('name') === 'london' ? [place] : [] });
+  }, 'en', 'GB');
+  assert.equal(result.correction, 'London');
+});
+
+test('does not invent a correction when the optional spelling service is down or suggests an unrelated word', async () => {
+  for (const spelling of [new Response(null, { status: 503 }), Response.json({ query: { searchinfo: { suggestion: 'apple' } } })]) {
+    const result = await suggestCities('qxzzzz', async url =>
+      url.hostname === 'en.wikipedia.org' ? spelling : Response.json({}), 'en');
+    assert.deepEqual(result, { cities: [], correction: null });
+  }
 });

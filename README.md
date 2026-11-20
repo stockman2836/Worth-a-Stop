@@ -4,7 +4,11 @@ Worth a Stop is a travel planner for people exploring a city on their own. City 
 
 ## Getting started
 
-You can search for cities by name in the browser or from the command line. Both use the Open-Meteo geocoding API. Run the commands below from the repository root with Node.js 22 or later.
+You can search for cities by name in the browser or from the command line. Both use the Open-Meteo geocoding API. The command line can also import an organizer’s published event calendar. Run the commands below from the repository root with Node.js 22 or later. Install the calendar parser before importing events or running the tests.
+
+```sh
+npm ci
+```
 
 ### Website
 
@@ -25,9 +29,22 @@ The first command prints a JSON array of matches. Each match includes the provid
 
 An empty array means the search found no matching settlements. Try another spelling if you expect a match. For example, during testing, `Kyoto` returned results while `京都` returned an empty array. If the request fails, the command writes an error to standard error and exits with a nonzero status.
 
-`node --test` checks how the app handles geocoder responses and runs offline.
+`node --test` checks the city search and calendar importer offline.
 
 Place names and coordinates come from GeoNames via Open-Meteo. [Geocoding API documentation](https://open-meteo.com/en/docs/geocoding-api) · [GeoNames](https://www.geonames.org/)
+
+### Import an event calendar
+
+Pass the organizer’s direct iCalendar download URL. The importer writes JSON to standard output. These examples use two organizers’ own publications.
+
+```sh
+node bin/events.mjs "https://www.stmarysbc.com/events/christmas-fair-2026/ical/"
+node bin/events.mjs "https://carlypaoli.com/events/italian-church-concert/?ical=1"
+```
+
+The import records the calendar URL and the UTC time it was checked. Each event includes its source UID, title, venue, published start and end, status, and organizer link when available. If an event has no link, its URL points to the calendar. An empty calendar produces an empty event list. Download and parsing errors go to standard error with a nonzero exit status.
+
+Dates and clock times follow the publication. A date-only event has `time: null`, and its end date is exclusive. UTC times retain their UTC label. For local times, the importer uses the event’s time zone, then the calendar’s declared default if present. A floating time with neither has `timezone: null`. An explicit duration is kept when supplied. Each published event definition appears once per entry in the feed. Recurring series and their exceptions are identified for later expansion into a daily agenda.
 
 ## Development
 

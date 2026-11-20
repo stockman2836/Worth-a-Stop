@@ -24,8 +24,15 @@ input { min-width: 0; flex: 1 1 15rem; padding: .9rem 1rem; border: 1px solid #8
 #submit:hover { background: #0d394b; }
 #status { margin: 2rem 0 0; color: #415866; }
 #results { padding: 0; list-style: none; }
-#results li { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem 1rem; padding: 1rem 0; border-top: 1px solid #d6e0e4; }
+#results > li { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem 1rem; padding: 1rem 0; border-top: 1px solid #d6e0e4; }
 #results strong { flex: 1 1 10rem; }
 .zone { font-variant-numeric: tabular-nums; color: #546770; font-size: .9rem; }
+#results details { width: 100%; }
+#results summary { cursor: pointer; color: #16485c; width: fit-content; padding-block: .35rem; }
+#results details p { color: #415866; font-size: .925rem; }
+.calendars { list-style: none; padding: 0; }
+.calendars li { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: .45rem 1rem; padding: .6rem 0; }
+.calendars a { color: #16485c; text-underline-offset: .18rem; }
+#results details button { border: 1px solid #8ea2ac; border-radius: .35rem; background: transparent; color: #16485c; padding: .45rem .7rem; }
 footer { flex-wrap: wrap; gap: .4rem; font-size: .875rem; color: #546770; }
 a { color: inherit; }

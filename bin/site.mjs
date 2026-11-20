@@ -6,6 +6,7 @@ const assets = new Map([
   ['/site.css', ['../web/site.css', 'text/css']],
   ['/site.mjs', ['../web/site.mjs', 'text/javascript']],
   ['/cities.mjs', ['../src/cities.mjs', 'text/javascript']],
+  ['/sources.mjs', ['../src/sources.mjs', 'text/javascript']],
 ]);
 
 const server = createServer(async (request, response) => {

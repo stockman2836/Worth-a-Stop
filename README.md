@@ -1,6 +1,6 @@
 # Worth a Stop
 
-Worth a Stop is a travel planner for people exploring a city on their own. City search is available today. The planned map will help you find places that are open and events you can reach before you leave. For longer trips, you’ll be able to link days across cities and plan around train journeys, overnight stays, and existing bookings.
+Worth a Stop is a travel planner for people exploring a city on their own. You can search for a city and discover nearby event calendars. The planned map will help you find places that are open and events you can reach before you leave. For longer trips, you’ll be able to link days across cities and plan around train journeys, overnight stays, and existing bookings.
 
 ## Getting started
 
@@ -18,6 +18,10 @@ node bin/site.mjs
 
 Open `http://127.0.0.1:3000` in your browser. The site opens in Russian if your browser language is Russian and in English otherwise. Use the RU/EN switch to change languages. It remembers your choice on this device and refreshes the current search. City and region names appear in the selected language when the provider has a translation. Live searches require a connection to Open-Meteo.
 
+Open **Nearby calendars** on a city result to see up to 25 venue calendars from OpenAgenda. The search uses coordinates and finds publishers with ongoing or future listings within 5 km of the city centre. You can open the programme or copy its venue-specific iCalendar link for the importer below. Names follow the publisher’s language. Coverage depends on contributions to the [public OpenAgenda directory](https://public.opendatasoft.com/explore/dataset/evenements-publics-openagenda/).
+
+The browser saves the calendar references for each city for reuse. Opening a city again after 24 hours rechecks the directory. **Check again** requests an immediate refresh. If the directory is unavailable, the site labels any saved result with its original check time.
+
 ### Command line and tests
 
 ```sh
@@ -29,7 +33,7 @@ The first command prints a JSON array of matches. Each match includes the provid
 
 An empty array means the search found no matching settlements. Try another spelling if you expect a match. For example, during testing, `Kyoto` returned results while `京都` returned an empty array. If the request fails, the command writes an error to standard error and exits with a nonzero status.
 
-`node --test` checks the city search and calendar importer offline.
+`node --test` checks city search, calendar discovery, caching, and event imports offline.
 
 Place names and coordinates come from GeoNames via Open-Meteo. [Geocoding API documentation](https://open-meteo.com/en/docs/geocoding-api) · [GeoNames](https://www.geonames.org/)
 

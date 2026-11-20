@@ -32,5 +32,20 @@
     <ul id="results" aria-labelledby="status"></ul>
   </main>
   <footer><span id="attribution">Location data</span> · <a href="https://www.geonames.org/">GeoNames</a> / <a href="https://open-meteo.com/">Open-Meteo</a></footer>
+  <template id="day-agenda">
+    <section class="day-agenda">
+      <div class="day-controls">
+        <div class="day-shortcuts">
+          <button type="button" data-day="today"></button>
+          <button type="button" data-day="tomorrow"></button>
+        </div>
+        <label class="day-picker"><span></span><input type="date" required></label>
+      </div>
+      <p class="day-status" role="status"></p>
+      <ul class="day-events"></ul>
+      <button type="button" class="more-events" hidden></button>
+      <button type="button" class="retry-events" hidden></button>
+    </section>
+  </template>
 </body>
 </html>

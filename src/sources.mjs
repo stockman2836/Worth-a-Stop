@@ -1,5 +1,13 @@
-const directory = 'https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/evenements-publics-openagenda/records';
+export const openAgendaDataset = 'https://public.opendatasoft.com/api/explore/v2.1/catalog/datasets/evenements-publics-openagenda';
+const directory = openAgendaDataset + '/records';
 const day = 24 * 60 * 60 * 1000;
+
+export function nearbyVenues({ latitude, longitude }, radiusKm) {
+  if (!Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180) {
+    throw new Error('Invalid city coordinates.');
+  }
+  return `within_distance(location_coordinates,geom'POINT(${longitude} ${latitude})',${radiusKm}km)`;
+}
 
 function readSources(rows) {
   if (!Array.isArray(rows)) throw new Error('Invalid calendar directory response.');
@@ -23,9 +31,8 @@ function readSources(rows) {
 }
 
 export async function findSources(city, { refresh = false, storage, fetchResponse = fetch } = {}) {
-  const { latitude, longitude } = city;
-  if (!Number.isSafeInteger(city.id) || !Number.isFinite(latitude) || Math.abs(latitude) > 90 ||
-      !Number.isFinite(longitude) || Math.abs(longitude) > 180) throw new Error('Invalid city.');
+  if (!Number.isSafeInteger(city.id)) throw new Error('Invalid city.');
+  const innerArea = nearbyVenues(city, 5);
 
   const key = `worth-a-stop.sources.v1.${city.id}`;
   let cached;
@@ -45,16 +52,16 @@ export async function findSources(city, { refresh = false, storage, fetchRespons
     order_by: 'listings desc,originagenda_uid,location_uid', limit: '25',
   });
 
-  async function nearby(radiusKm) {
-    url.searchParams.set('where', `within_distance(location_coordinates,geom'POINT(${longitude} ${latitude})',${radiusKm}km) AND lastdate_end >= now() AND originagenda_uid IS NOT NULL AND location_uid IS NOT NULL AND originagenda_title IS NOT NULL AND location_name IS NOT NULL`);
+  async function nearby(radiusKm, area) {
+    url.searchParams.set('where', `${area} AND lastdate_end >= now() AND originagenda_uid IS NOT NULL AND location_uid IS NOT NULL AND originagenda_title IS NOT NULL AND location_name IS NOT NULL`);
     const response = await fetchResponse(url, { signal: AbortSignal.timeout(15_000) });
     if (!response.ok) throw new Error(`Calendar directory returned HTTP ${response.status}.`);
     const { results } = await response.json();
     return { rows: results, sources: readSources(results), radiusKm };
   }
   try {
-    let result = await nearby(5);
-    if (!result.sources.length) result = await nearby(25);
+    let result = await nearby(5, innerArea);
+    if (!result.sources.length) result = await nearby(25, nearbyVenues(city, 25));
     const { rows, sources, radiusKm } = result;
     const checkedAt = Date.now();
     try {

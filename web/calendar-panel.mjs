@@ -1,13 +1,17 @@
 import { findSources } from './sources.mjs';
 import { findGuide } from './guides.mjs';
+import { dayPanel } from './day-panel.mjs';
 
-export function calendarsPanel(city, open, language, text, storage) {
+export function calendarsPanel(city, open, language, text, storage, initialDate, signal) {
   const details = document.createElement('details');
   details.name = 'nearby-calendars';
   details.dataset.cityId = String(city.id);
   const summary = document.createElement('summary');
-  summary.textContent = text.calendars;
-  summary.setAttribute('aria-label', `${text.calendars} · ${city.name}`);
+  summary.textContent = text.day;
+  summary.setAttribute('aria-label', `${text.day} · ${city.name}`);
+  const sources = document.createElement('details');
+  const sourcesTitle = document.createElement('summary');
+  sourcesTitle.textContent = text.calendars;
   const message = document.createElement('p');
   message.setAttribute('role', 'status');
   const list = document.createElement('ul');
@@ -18,7 +22,8 @@ export function calendarsPanel(city, open, language, text, storage) {
   const refresh = document.createElement('button');
   refresh.type = 'button';
   refresh.textContent = text.refresh;
-  details.append(summary, message, list, guideBox, refresh);
+  sources.append(sourcesTitle, message, list, guideBox, refresh);
+  details.append(summary, sources);
 
   async function loadGuide() {
     guideBox.textContent = text.guideWait;
@@ -77,7 +82,12 @@ export function calendarsPanel(city, open, language, text, storage) {
     }
   }
   details.addEventListener('toggle', () => {
-    if (details.open && !message.textContent) load(false);
+    if (details.open && !details.querySelector('.day-agenda')) {
+      sources.before(dayPanel(city, language, initialDate, signal));
+    }
+  });
+  sources.addEventListener('toggle', () => {
+    if (sources.open && !message.textContent) load(false);
   });
   refresh.addEventListener('click', () => load(true));
   details.open = open;

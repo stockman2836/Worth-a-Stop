@@ -1,6 +1,6 @@
 # Worth a Stop
 
-Worth a Stop is a travel planner for people exploring a city on their own. You can search for a city and discover nearby event calendars. The planned map will help you find places that are open and events you can reach before you leave. For longer trips, you’ll be able to link days across cities and plan around train journeys, overnight stays, and existing bookings.
+Worth a Stop is a travel planner for people exploring a city on their own. Choose a city and a date to see nearby events, local times, venues and links to the published listings. The planned map will help you find places that are open and events you can reach before you leave. For longer trips, you’ll be able to link days across cities and plan around train journeys, overnight stays, and existing bookings.
 
 ## Getting started
 
@@ -18,11 +18,15 @@ node bin/site.mjs
 
 Open `http://127.0.0.1:3000` in your browser. The site opens in Russian if your browser language is Russian and in English otherwise. Use the RU/EN switch to change languages. It remembers your choice on this device and refreshes the current search. City and region names appear in the selected language when the provider has a translation. Live searches require a connection to Open-Meteo.
 
-Pick a destination under **Cities with event listings**, or start typing a city name. The destination buttons come from cities with current or upcoming OpenAgenda listings. Suggestions update after a short pause as you type. Select a city to open its calendars. The country and region help distinguish places with the same name.
+Pick a destination under **Cities with event listings**, or start typing a city name. The destination buttons come from cities with current or upcoming OpenAgenda listings. Suggestions update after a short pause as you type. Select a city to open its daily agenda. The country and region help distinguish places with the same name.
 
 If a search returns no cities, the website checks for nearby spellings in city names and, when needed, asks Wikipedia for a spelling suggestion. It checks the corrected name with the geocoder before showing it. For example, try `Lnodon` or `Будапшт`. Arrow Down moves keyboard focus from the search field to the first result.
 
-**Nearby calendars** shows up to 25 OpenAgenda venue calendars. The search starts within 5 km of the city centre and expands to 25 km if the first search is empty. The result shows which radius was used. Open a programme or copy its venue-specific iCalendar link for the importer below. Names follow the publisher’s language. Coverage depends on contributions to the [public OpenAgenda directory](https://public.opendatasoft.com/explore/dataset/evenements-publics-openagenda/).
+Under **Events by day**, choose Today, Tomorrow or a trip date. The site reads the individual sessions published in OpenAgenda. A multi-day event appears on each day it overlaps, and a recurring performance appears on its scheduled dates. Times use the destination’s time zone, shown alongside the results. When the city has no known time zone, the agenda uses UTC. Switching languages keeps the selected date.
+
+The daily search starts within 5 km of the city centre and expands to 25 km if it finds no sessions. Cancelled and indefinitely postponed listings are omitted. Sold-out events are labelled. When two publishers list the same title at the same venue and start time, the latest publication takes precedence. A source failure offers a retry, and an incomplete schedule is labelled. Event and venue names follow the publisher’s language. [OpenAgenda public dataset](https://public.opendatasoft.com/explore/dataset/evenements-publics-openagenda/)
+
+**Venue calendars and travel guide** shows up to 25 OpenAgenda venue calendars. Its search covers current and upcoming programmes, independently of the day you selected. Open a programme or copy its venue-specific iCalendar link for the importer below.
 
 The same panel independently looks up a nearby Wikivoyage guide. When the guide has an events or festivals section, it links to that section and lists the websites cited there, even when OpenAgenda has no calendars. These links are useful for checking dates with organisers. In the Russian interface, the site also checks the English edition when local festival links are missing. [Wikivoyage](https://www.wikivoyage.org/)
 
@@ -39,7 +43,7 @@ The first command prints a JSON array of matches. Each match includes the provid
 
 An empty array means the search found no matching settlements. Try another spelling if you expect a match. For example, during testing, `Kyoto` returned results while `京都` returned an empty array. If the request fails, the command writes an error to standard error and exits with a nonzero status.
 
-`node --test` checks city search, calendar discovery, caching, and event imports offline.
+`node --test` checks city search, daily schedules, calendar and guide discovery, caching and event imports offline.
 
 Place names and coordinates come from GeoNames via Open-Meteo. [Geocoding API documentation](https://open-meteo.com/en/docs/geocoding-api) · [GeoNames](https://www.geonames.org/)
 

@@ -6,6 +6,8 @@ const assets = new Map([
   ['/site.css', ['../web/site.css', 'text/css']],
   ['/site.mjs', ['../web/site.mjs', 'text/javascript']],
   ['/calendar-panel.mjs', ['../web/calendar-panel.mjs', 'text/javascript']],
+  ['/day-panel.mjs', ['../web/day-panel.mjs', 'text/javascript']],
+  ['/day-agenda.mjs', ['../src/day-agenda.mjs', 'text/javascript']],
   ['/cities.mjs', ['../src/cities.mjs', 'text/javascript']],
   ['/sources.mjs', ['../src/sources.mjs', 'text/javascript']],
   ['/guides.mjs', ['../src/guides.mjs', 'text/javascript']],

@@ -11,7 +11,7 @@ const copy = {
     featured: 'Города с афишей', corrected: name => `Возможно, вы имели в виду «${name}»?`,
     guide: 'Путеводитель Wikivoyage', guideLinks: 'Фестивали и события из путеводителя',
     guideWait: 'Ищем местный путеводитель…', guideError: 'Не удалось проверить Wikivoyage.',
-    calendars: 'Афиши рядом', looking: 'Ищем программы площадок в OpenAgenda…',
+    day: 'Афиша на день', calendars: 'Календари площадок и путеводитель', looking: 'Ищем программы площадок в OpenAgenda…',
     none: km => `В OpenAgenda нет программ с текущими или предстоящими событиями в радиусе ${km} км.`,
     unavailable: 'Не удалось проверить каталог OpenAgenda.', refresh: 'Проверить снова',
     nearby: km => `Программы OpenAgenda в радиусе ${km} км`, feed: 'Календарь (.ics)',
@@ -25,7 +25,7 @@ const copy = {
     featured: 'Cities with event listings', corrected: name => `Did you mean “${name}”?`,
     guide: 'Wikivoyage travel guide', guideLinks: 'Festival and event links from the guide',
     guideWait: 'Looking for a local travel guide…', guideError: 'Could not check Wikivoyage.',
-    calendars: 'Nearby calendars', looking: 'Looking up venue calendars on OpenAgenda…',
+    day: 'Events by day', calendars: 'Venue calendars and travel guide', looking: 'Looking up venue calendars on OpenAgenda…',
     none: km => `OpenAgenda lists no calendars with current or upcoming events within ${km} km.`,
     unavailable: 'The OpenAgenda directory could not be checked.', refresh: 'Check again',
     nearby: km => `OpenAgenda calendars within ${km} km`, feed: 'Calendar (.ics)',
@@ -71,7 +71,7 @@ function renderLanguage() {
   }
 }
 
-function cityRow(city, openId) {
+function cityRow(city, openId, initialDate, signal) {
   const row = document.createElement('li');
   const name = document.createElement('button');
   name.type = 'button';
@@ -82,7 +82,8 @@ function cityRow(city, openId) {
   area.textContent = [city.region, city.country ?? city.countryCode].filter(Boolean).join(', ');
   zone.textContent = city.timezone;
   zone.className = 'zone';
-  const panel = calendarsPanel(city, String(city.id) === openId, language, copy[language], storage);
+  const open = String(city.id) === openId;
+  const panel = calendarsPanel(city, open, language, copy[language], storage, open ? initialDate : undefined, signal);
   name.addEventListener('click', () => {
     input.value = city.name;
     submittedQuery = city.name;
@@ -102,7 +103,7 @@ function cancelSearch() {
   requestId++;
 }
 
-async function showSearch(query, openId, openSingle = false) {
+async function showSearch(query, openId, openSingle = false, initialDate) {
   cancelSearch();
   const currentRequest = requestId;
   searchController = new AbortController();
@@ -119,7 +120,7 @@ async function showSearch(query, openId, openSingle = false) {
     const { cities, correction } = await suggestCities(query, lookup, language, selectedCountry);
     if (currentRequest !== requestId) return;
     if (!openId && openSingle && cities.length === 1) openId = String(cities[0].id);
-    results.replaceChildren(...cities.map(city => cityRow(city, openId)));
+    results.replaceChildren(...cities.map(city => cityRow(city, openId, initialDate, signal)));
     status.textContent = correction ? text.corrected(correction) : cities.length ? text.found(cities.length) : text.empty;
   } catch {
     if (currentRequest === requestId) status.textContent = text.error;
@@ -162,7 +163,10 @@ for (const button of buttons) {
     language = button.dataset.language;
     try { storage?.setItem(preferenceKey, language); } catch { /* Optional preference. */ }
     renderLanguage();
-    if (submittedQuery !== null) showSearch(submittedQuery, results.querySelector('details[open]')?.dataset.cityId);
+    if (submittedQuery !== null) {
+      const panel = results.querySelector('details[data-city-id][open]');
+      showSearch(submittedQuery, panel?.dataset.cityId, false, panel?.querySelector('input[type=date]')?.value);
+    }
   });
 }
 

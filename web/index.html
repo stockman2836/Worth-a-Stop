@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Worth a Stop</title>
+  <link rel="stylesheet" href="/site.css">
+  <script type="module" src="/site.mjs"></script>
+</head>
+<body>
+  <header>
+    <span class="brand">Worth a Stop<span class="period" aria-hidden="true">.</span></span>
+    <div id="languages" role="group" aria-label="Language">
+      <button type="button" lang="ru" aria-label="Русский" data-language="ru">RU</button>
+      <button type="button" lang="en" aria-label="English" data-language="en">EN</button>
+    </div>
+  </header>
+  <main>
+    <h1 id="heading">Which city are you visiting?</h1>
+    <form id="search-form" role="search">
+      <label for="query" id="query-label">City name</label>
+      <div class="search-field">
+        <input id="query" name="city" type="search" autocomplete="off" dir="auto">
+        <button type="submit" id="submit">Search</button>
+      </div>
+    </form>
+    <p id="status" role="status"></p>
+    <ul id="results" aria-labelledby="status"></ul>
+  </main>
+  <footer><span id="attribution">Location data</span> · <a href="https://www.geonames.org/">GeoNames</a> / <a href="https://open-meteo.com/">Open-Meteo</a></footer>
+</body>
+</html>

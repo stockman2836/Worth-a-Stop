@@ -34,6 +34,18 @@ test('accepts the empty response returned by Open-Meteo', async () => {
   assert.deepEqual(result, []);
 });
 
+test('requests city and region names in the selected language', async () => {
+  const cities = await searchCities('Будапешт', async url => {
+    assert.equal(url.searchParams.get('name'), 'Будапешт');
+    assert.equal(url.searchParams.get('language'), 'en');
+    return Response.json({ results: [{
+      id: 3054643, name: 'Budapest', latitude: 47.49835, longitude: 19.04045,
+      feature_code: 'PPLC', country: 'Hungary', admin1: 'Budapest',
+    }] });
+  }, 'en');
+  assert.equal(cities[0].country, 'Hungary');
+});
+
 test('keeps a provider outage distinguishable from an empty search', async () => {
   await assert.rejects(searchCities('Porto', async () => new Response(null, { status: 503 })), /503/);
 });

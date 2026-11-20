@@ -29,14 +29,14 @@ function readCities(payload) {
   });
 }
 
-export async function searchCities(query, fetchResponse = fetch) {
+export async function searchCities(query, fetchResponse = fetch, language = 'ru') {
   const name = query.trim();
   if (Array.from(name).length < 2) {
     throw new Error('Введите хотя бы два символа названия города.');
   }
 
   const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
-  url.search = new URLSearchParams({ name, language: 'ru', count: '20' }).toString();
+  url.search = new URLSearchParams({ name, language, count: '20' }).toString();
   const response = await fetchResponse(url, { signal: AbortSignal.timeout(10_000) });
   if (!response.ok) {
     throw new Error(`Геокодер недоступен (HTTP ${response.status}).`);

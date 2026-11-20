@@ -1,34 +1,38 @@
 # Worth a Stop
 
-Планировщик для самостоятельных путешествий. Выбираешь город, дату и время до отъезда. Карта показывает, что в этот день открыто, какие события проходят рядом и куда ты успеешь сходить. Несколько таких дней складываются в отпуск с переездами, ночёвками и закреплёнными бронированиями.
+Worth a Stop is a travel planner for people exploring a city on their own. City search is available today. The planned map will help you find places that are open and events you can reach before you leave. For longer trips, you’ll be able to link days across cities and plan around train journeys, overnight stays, and existing bookings.
 
-## Что работает сейчас
+## Getting started
 
-Поиск города по названию через Open-Meteo работает в браузере и в командной строке. Требуется Node.js 22 или новее. Выполняй команды из корня репозитория.
+You can search for cities by name in the browser or from the command line. Both use the Open-Meteo geocoding API. Run the commands below from the repository root with Node.js 22 or later.
 
-### Сайт
+### Website
 
 ```sh
 node bin/site.mjs
 ```
 
-Открой http://127.0.0.1:3000. Доступны русский и английский языки. При первом посещении сайт учитывает язык браузера. Переключатель RU/EN сохраняет выбор на этом устройстве и обновляет результаты текущего поиска. Если у геокодера есть перевод, он вернёт название города и региона на выбранном языке. Для живого поиска браузеру нужен доступ к Open-Meteo.
+Open `http://127.0.0.1:3000` in your browser. The site opens in Russian if your browser language is Russian and in English otherwise. Use the RU/EN switch to change languages. It remembers your choice on this device and refreshes the current search. City and region names appear in the selected language when the provider has a translation. Live searches require a connection to Open-Meteo.
 
-### Консоль и тесты
+### Command line and tests
 
 ```sh
-node bin/city.mjs "Будапешт"
+node bin/city.mjs "Budapest"
 node --test
 ```
 
-Первая команда обращается к геокодеру и выводит JSON с вариантами. Для каждого доступны ID источника, название и координаты. Регион, страна, код страны и часовой пояс принимают значение `null`, если источник их не указал. Одноимённые города различаются по ID и региону. Пустой массив означает, что среди результатов нет подходящего населённого пункта. В таком случае стоит попробовать другое написание: при проверке `Kyoto` нашлось, а `京都` дало пустой результат. Ошибка запроса выводится в stderr с ненулевым кодом завершения. Вторая команда проверяет обработку ответов без доступа к сети.
+The first command prints a JSON array of matches. Each match includes the provider’s ID, the place name, and its coordinates. The region, country, country code, and time zone are `null` when the provider omits them. Use the ID and region to distinguish places with the same name.
 
-Источник координат и названий — GeoNames через Open-Meteo. [Документация геокодера](https://open-meteo.com/en/docs/geocoding-api) · [GeoNames](https://www.geonames.org/)
+An empty array means the search found no matching settlements. Try another spelling if you expect a match. For example, during testing, `Kyoto` returned results while `京都` returned an empty array. If the request fails, the command writes an error to standard error and exits with a nonzero status.
 
-## Как развиваем проект
+`node --test` checks how the app handles geocoder responses and runs offline.
 
-Сначала развиваем двуязычный сайт для настольных браузеров. Адаптация интерфейса под смартфоны запланирована отдельным этапом.
+Place names and coordinates come from GeoNames via Open-Meteo. [Geocoding API documentation](https://open-meteo.com/en/docs/geocoding-api) · [GeoNames](https://www.geonames.org/)
 
-Идеи и критерии готовности храним в локальном `ROADMAP.md` в корне рабочей копии. Git игнорирует этот файл. Берём один сквозной сценарий за раз. Когда результат можно проверить через обычную точку входа, описываем его запуск здесь и убираем выполненный пункт из очереди.
+## Development
 
-Начинаем с одного приложения. Код обращения к внешнему источнику отделяем от отображения результатов. Общую абстракцию вводим, когда её действительно используют несколько частей проекта. Будапешт и другие города из примеров служат для проверки. Рабочие данные приложение получает из источников автоматически.
+The bilingual desktop website comes first. A mobile adaptation is planned for a later stage.
+
+We keep ideas and acceptance criteria in a local `ROADMAP.md` at the repository root. Git ignores this file. We build one end-to-end feature at a time. Once it works through the website or CLI, we document how to use it here and remove the completed item from the roadmap.
+
+We maintain a single application and keep data access separate from presentation. We introduce shared abstractions when multiple parts of the app need them. Cities such as Budapest serve as test cases. The app fetches its data automatically from external sources.

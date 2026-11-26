@@ -24,7 +24,9 @@ If a search returns no cities, the website checks for nearby spellings in city n
 
 Open **Nearby places** in a city card to explore up to twelve named markets, parks, gardens, viewpoints, museums and galleries within 2 km of the city centre. Distances are straight-line estimates to mapped points or area centres. Each name links to its OpenStreetMap object. Opening hours appear as published when available. The shortlist includes the nearest example of each available category before filling the remaining positions by distance. [© OpenStreetMap contributors](https://www.openstreetmap.org/copyright)
 
-The server caches place results for one hour and shares the same lookup across interface languages. If the primary Overpass endpoint fails, it tries a second public endpoint. If both are unavailable, the panel offers a retry. Opening hours retain OpenStreetMap notation.
+Each place also appears on an interactive map. Select its name in the list to zoom to its marker and open the published hours and source link. Selecting a marker highlights its list entry. The map uses Leaflet and OpenStreetMap tiles.
+
+The server caches place results for one hour and shares the same lookup across interface languages. If the primary Overpass endpoint fails, it tries a second public endpoint. The browser saves the last successful shortlist for each city centre. If a later request fails, it shows that shortlist with its original check time and a retry button. Without saved results it shows a loading error. Opening hours retain OpenStreetMap notation.
 
 Under **Events by day**, choose Today, Tomorrow or a trip date. The site reads the individual sessions published in OpenAgenda. A multi-day event appears on each day it overlaps, and a recurring performance appears on its scheduled dates. Times use the destination’s time zone, shown alongside the results. When the city has no known time zone, the agenda uses UTC. Switching languages keeps the selected date.
 

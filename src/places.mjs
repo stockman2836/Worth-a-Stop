@@ -47,7 +47,7 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch } = {})
     const name = tags.name;
     if (!key || !name || ['private', 'no'].includes(tags.access) || tags.opening_hours === 'off') continue;
     const km = distance(latitude, longitude, point.lat, point.lon);
-    if (km <= radius) places.push({ name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
+    if (km <= radius) places.push({ latitude: point.lat, longitude: point.lon, name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
       url: `https://www.openstreetmap.org/${type}/${id}` });
   }
   places.sort((a, b) => a.km - b.km);

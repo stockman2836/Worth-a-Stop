@@ -12,6 +12,8 @@ test('uses localized names, published hours and object links with great-circle d
   const [place] = places;
   assert.equal(place.names.ru, 'Музей');
   assert.equal(place.url, 'https://www.openstreetmap.org/node/9');
+  assert.equal(place.latitude, node.lat);
+  assert.equal(place.longitude, node.lon);
   assert.equal(place.hours, node.tags.opening_hours);
   assert.ok(Math.abs(place.km - 1) < .002);
 });

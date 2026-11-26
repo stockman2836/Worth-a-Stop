@@ -2,7 +2,7 @@ import { itineraryStop, itineraryStore } from './itinerary.mjs';
 import { nextDate, todayIn } from './day-agenda.mjs';
 import { walkingPanel } from './walking-panel.mjs';
 import { arrivalTimes } from './arrival-times.mjs';
-import { localInstant } from './opening-hours.mjs';
+import { localInstant, visitOpeningState } from './opening-hours.mjs';
 
 const unsavedStarts = new Map();
 
@@ -17,6 +17,12 @@ const copy = {
     invalidStart: 'Это местное время не удалось определить. Выберите другое время.',
     partial: 'Расчёт неполный. Проверьте отмеченные остановки.', finish: 'Ожидаемое завершение',
     startUnsaved: 'Время старта доступно в текущей вкладке.',
+    hours: 'Сохранённое расписание', fits: 'Место открыто на всё время посещения.',
+    closedArrival: 'Место закрыто к моменту прибытия.',
+    closes: 'Закрытие до ухода', remaining: 'Доступное время до закрытия', break: 'Перерыв во время посещения',
+    hoursUnknown: 'Расписание требует проверки по источнику. Добавьте место повторно, чтобы обновить сохранённые часы.',
+    visitUnknown: 'Для проверки часов работы нужно рассчитать время посещения.',
+    conflicts: count => `Конфликтов с часами работы — ${count}.`,
     reasons: { 'start-time': 'Не задано время старта.', 'previous-stop': 'Неизвестно время ухода с предыдущей остановки.',
       'walking-leg': 'Нужен рассчитанный пеший переход.', 'visit-duration': 'Укажите длительность посещения.',
       'event-time': 'Время начала события неизвестно.', 'event-end': 'Время окончания события неизвестно.',
@@ -31,6 +37,12 @@ const copy = {
     invalidStart: 'This local time could not be resolved. Choose another time.',
     partial: 'The schedule is incomplete. Check the marked stops.', finish: 'Estimated finish',
     startUnsaved: 'Start time is available in this tab.',
+    hours: 'Saved opening hours', fits: 'Open throughout the visit.',
+    closedArrival: 'The place is closed on arrival.',
+    closes: 'Closes before departure', remaining: 'Available time before closing', break: 'Break during the visit',
+    hoursUnknown: 'Check the schedule with the source. Add the place again to refresh its saved hours.',
+    visitUnknown: 'Calculate the visit times to check opening hours.',
+    conflicts: count => `Opening-hour conflicts — ${count}.`,
     reasons: { 'start-time': 'Start time unspecified.', 'previous-stop': 'Previous departure time is unknown.',
       'walking-leg': 'A calculated walking leg is needed.', 'visit-duration': 'Enter the visit duration.',
       'event-time': 'Event start time is unknown.', 'event-end': 'Event end time is unknown.',
@@ -96,6 +108,7 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
   function updateArrivals() {
     const start = localInstant(activeDay, startInput.value, city.timezone || 'UTC');
     const times = arrivalTimes(currentStops, routeLegs, start);
+    let conflicts = 0;
     for (const [index, item] of [...list.children].entries()) {
       const time = times[index];
       const info = item.querySelector('.stop-timing');
@@ -105,10 +118,26 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
         time.waiting > 0 && text.waiting + ' · ' + minutes.format(time.waiting),
         time.late > 0 && text.late + ' · ' + minutes.format(time.late),
         time.reason && text.reasons[time.reason]].filter(Boolean).join(' · ');
+      if (currentStops[index].type === 'place') {
+        const check = visitOpeningState(currentStops[index].hours, time.arrival, time.departure, city.timezone);
+        const warning = item.querySelector('.visit-hours');
+        warning.dataset.state = check.state;
+        if (check.state === 'fits') warning.textContent = text.fits;
+        else if (check.state === 'closed-arrival') { warning.textContent = text.closedArrival; conflicts++; }
+        else if (check.state === 'break') {
+          warning.textContent = text.break + ' · ' + when.format(check.closedAt) + ' – ' + when.format(check.reopensAt);
+          conflicts++;
+        } else if (check.state === 'closes-during') {
+          warning.textContent = text.closes + ' · ' + when.format(check.closedAt) + ' · ' + text.remaining +
+            ' · ' + minutes.format(check.availableMinutes);
+          conflicts++;
+        } else warning.textContent = check.state === 'unknown-time' ? text.visitUnknown : text.hoursUnknown;
+      }
     }
     const finish = times.at(-1)?.departure;
     timingStatus.textContent = [!startInput.value ? text.chooseStart : start === undefined ? text.invalidStart :
       times.some(time => time.reason) ? text.partial : finish != null ? text.finish + ' · ' + when.format(finish) : '',
+      conflicts > 0 && text.conflicts(conflicts),
       unsavedStarts.has(startKey()) && text.startUnsaved].filter(Boolean).join(' ');
   }
   startInput.addEventListener('change', () => {
@@ -146,6 +175,12 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
           (stop.end === null ? '' : ' – ' + when.format(stop.end));
         item.append(time);
       } else {
+        const hours = document.createElement('p');
+        hours.className = 'saved-hours';
+        hours.textContent = stop.hours ? text.hours + ' · ' + stop.hours : '';
+        const warning = document.createElement('p');
+        warning.className = 'visit-hours';
+        item.append(hours, warning);
         const label = document.createElement('label');
         label.className = 'day-picker';
         const input = document.createElement('input');

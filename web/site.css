@@ -91,6 +91,10 @@ input { min-width: 0; flex: 1 1 15rem; padding: .9rem 1rem; border: 1px solid #8
 .itinerary-start { margin-top: .75rem; }
 .stop-timing { color: #16485c; font-variant-numeric: tabular-nums; }
 .stop-timing[data-reason]:not([data-reason=""]) { color: #95511e; }
+.visit-hours { padding: .6rem .75rem; background: #f7fafb; border-left: 3px solid #8ea2ac; }
+.visit-hours[data-state="fits"] { color: #176042; border-color: #176042; }
+.visit-hours[data-state="closed-arrival"], .visit-hours[data-state="closes-during"], .visit-hours[data-state="break"] { color: #95511e; border-color: #b4541a; }
+.saved-hours:empty { display: none; }
 .leaflet-popup-content { font: .95rem/1.5 "Inter", "Segoe UI", sans-serif; }
 .map-status:empty { display: none; }
 footer { flex-wrap: wrap; gap: .4rem; font-size: .875rem; color: #546770; }

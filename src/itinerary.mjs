@@ -13,7 +13,8 @@ export function itineraryStop(item, type) {
   const end = type === 'event' && Number.isFinite(item.end) && Number.isFinite(new Date(item.end).getTime()) ? item.end : null;
   const location = eventLocation(item.location?.latitude ?? item.latitude, item.location?.longitude ?? item.longitude);
   return { id: JSON.stringify([type, url.href, start]), type, title, url: url.href,
-    names: item.names || {}, venue: item.venue || null, start, end, duration: null, ...(location && { location }) };
+    names: item.names || {}, venue: item.venue || null, start, end, duration: null,
+    hours: type === 'place' && typeof item.hours === 'string' ? item.hours : null, ...(location && { location }) };
 }
 
 export function itineraryStore(cityId, storage) {
@@ -56,7 +57,8 @@ export function itineraryStore(cityId, storage) {
     read,
     add(day, stop) {
       return change(day, stops => stops.some(s => s.id === stop.id)
-        ? stops.map(existing => existing.id === stop.id && stop.location ? { ...existing, location: stop.location } : existing)
+        ? stops.map(existing => existing.id === stop.id ? { ...existing,
+          ...(stop.location && { location: stop.location }), hours: stop.hours } : existing)
         : [...stops, stop]);
     },
     remove(day, id) { return change(day, stops => stops.filter(stop => stop.id !== id)); },

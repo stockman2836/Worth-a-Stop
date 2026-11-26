@@ -44,6 +44,10 @@ Place visits are checked against the opening-hours snapshot saved with the stop.
 
 Older stops without saved hours remain unverified. Adding the same place again refreshes its saved hours while preserving its order and visit duration. Public-holiday rules, uncertain schedules and ambiguous clock-change intervals require checking with the source.
 
+Open **Find a replacement** on a place stop after setting the walking start and visit duration. It searches suggestions within 2 km of that stop and checks up to three nearest candidates whose hours cover the current visit window. It then recalculates adjacent walking legs, verifies the resulting visit against opening hours and checks arrival at the next fixed event. A failed route or an unverified event window excludes the candidate.
+
+Each alternative shows its verified visit time, published hours, source link and a map preview. **Replace stop** keeps the visit duration and position in the plan, then recalculates routes and arrival times. Changing the plan, start time or calculated route invalidates previous choices. Saved place suggestions are labelled when the live source is unavailable. Alternative checks use the hours supplied by the place source and the cached walking routes.
+
 **Walking between stops** calculates each adjacent leg in the saved order using the public FOSSGIS OSRM foot router. It shows distances, estimated walking times and a total when every leg is available. **Show route on map** draws the paths and numbered stops. Reordering or removing stops recalculates the route, while visit-duration edits reuse it.
 
 Missing coordinates leave a gap in the route. Older saved stops can regain coordinates by adding the same stop again from current suggestions, preserving its position and duration. Provider failures offer a retry. Calculated legs are shown individually when the whole itinerary cannot be routed. The router uses paths within 100 metres of the published coordinates, and successful results are cached for one hour. [Routing service and attribution](https://routing.openstreetmap.de/about.html)

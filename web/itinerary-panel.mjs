@@ -3,6 +3,7 @@ import { nextDate, todayIn } from './day-agenda.mjs';
 import { walkingPanel } from './walking-panel.mjs';
 import { arrivalTimes } from './arrival-times.mjs';
 import { localInstant, visitOpeningState } from './opening-hours.mjs';
+import { alternativesPanel } from './alternatives-panel.mjs';
 
 const unsavedStarts = new Map();
 
@@ -23,6 +24,7 @@ const copy = {
     hoursUnknown: 'Расписание требует проверки по источнику. Добавьте место повторно, чтобы обновить сохранённые часы.',
     visitUnknown: 'Для проверки часов работы нужно рассчитать время посещения.',
     conflicts: count => `Конфликтов с часами работы — ${count}.`,
+    replaced: 'Остановка заменена. Переходы и расписание пересчитываются.',
     reasons: { 'start-time': 'Не задано время старта.', 'previous-stop': 'Неизвестно время ухода с предыдущей остановки.',
       'walking-leg': 'Нужен рассчитанный пеший переход.', 'visit-duration': 'Укажите длительность посещения.',
       'event-time': 'Время начала события неизвестно.', 'event-end': 'Время окончания события неизвестно.',
@@ -43,6 +45,7 @@ const copy = {
     hoursUnknown: 'Check the schedule with the source. Add the place again to refresh its saved hours.',
     visitUnknown: 'Calculate the visit times to check opening hours.',
     conflicts: count => `Opening-hour conflicts — ${count}.`,
+    replaced: 'Stop replaced. Recalculating walking legs and schedule.',
     reasons: { 'start-time': 'Start time unspecified.', 'previous-stop': 'Previous departure time is unknown.',
       'walking-leg': 'A calculated walking leg is needed.', 'visit-duration': 'Enter the visit duration.',
       'event-time': 'Event start time is unknown.', 'event-end': 'Event end time is unknown.',
@@ -90,6 +93,8 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
   element.append(title, label, startLabel, zone, timingStatus, list, status);
   let currentStops = [];
   let routeLegs = [];
+  let replacementController;
+  let alternativePanels = [];
   function startKey() { return `worth-a-stop.itinerary.start.v1.${city.id}.${activeDay}`; }
   function readStart() {
     const key = startKey();
@@ -104,6 +109,10 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
   element.append(walking.element);
   const when = new Intl.DateTimeFormat(language, { timeZone: city.timezone || 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const minutes = new Intl.NumberFormat(language, { style: 'unit', unit: 'minute', maximumFractionDigits: 0 });
+  function replacementContext() {
+    return { day: activeDay, stops: store.read(activeDay).stops, legs: routeLegs,
+      start: localInstant(activeDay, startInput.value, city.timezone || 'UTC') };
+  }
 
   function updateArrivals() {
     const start = localInstant(activeDay, startInput.value, city.timezone || 'UTC');
@@ -139,6 +148,7 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
       times.some(time => time.reason) ? text.partial : finish != null ? text.finish + ' · ' + when.format(finish) : '',
       conflicts > 0 && text.conflicts(conflicts),
       unsavedStarts.has(startKey()) && text.startUnsaved].filter(Boolean).join(' ');
+    for (const panel of alternativePanels) panel.check();
   }
   startInput.addEventListener('change', () => {
     const key = startKey();
@@ -158,6 +168,10 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
     return button;
   }
   function render(result = store.read(activeDay), feedback = '') {
+    timeline.clearAlternative();
+    replacementController?.abort();
+    replacementController = new AbortController();
+    alternativePanels = [];
     currentStops = result.stops;
     list.replaceChildren();
     for (const [index, stop] of result.stops.entries()) {
@@ -195,6 +209,13 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
           render(store.duration(activeDay, stop.id, input.value ? Number(input.value) : null));
         });
         item.append(label);
+        const alternatives = alternativesPanel(stop, language, city.timezone, replacementContext,
+          (context, id, replacement) => {
+            if (context.day !== activeDay || readStart() !== startInput.value) throw Error('Plan changed');
+            render(store.replace(activeDay, id, replacement, context.stops), text.replaced);
+          }, timeline, storage, AbortSignal.any([signal, replacementController.signal]));
+        alternativePanels.push(alternatives);
+        item.append(alternatives.element);
       }
       const actions = document.createElement('div');
       actions.className = 'itinerary-actions';

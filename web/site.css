@@ -95,6 +95,11 @@ input { min-width: 0; flex: 1 1 15rem; padding: .9rem 1rem; border: 1px solid #8
 .visit-hours[data-state="fits"] { color: #176042; border-color: #176042; }
 .visit-hours[data-state="closed-arrival"], .visit-hours[data-state="closes-during"], .visit-hours[data-state="break"] { color: #95511e; border-color: #b4541a; }
 .saved-hours:empty { display: none; }
+.alternatives { margin-block: .75rem; }
+.alternatives ul { list-style: none; padding: 0; }
+.alternatives li { background: #f7fafb; padding: .8rem; border: 1px solid #d6e0e4; margin-block: .5rem; }
+.alternatives button { margin-right: .5rem; }
+.alternative-marker span { background: #b4541a; }
 .leaflet-popup-content { font: .95rem/1.5 "Inter", "Segoe UI", sans-serif; }
 .map-status:empty { display: none; }
 footer { flex-wrap: wrap; gap: .4rem; font-size: .875rem; color: #546770; }

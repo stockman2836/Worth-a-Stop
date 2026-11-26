@@ -48,6 +48,7 @@ export function placesPanel(city, language, signal, open, selection) {
   let map;
   let events = [];
   let selectedEvent;
+  let alternative;
   let route = { legs: [], stops: [] };
   const dayListeners = new Set();
   let itinerary;
@@ -199,6 +200,7 @@ export function placesPanel(city, language, signal, open, selection) {
       loadedPlaces = places;
       updateHours();
       if (selectedEvent && events.includes(selectedEvent)) map.selectEvent(selectedEvent);
+      if (alternative) map.previewPlace(alternative);
       const date = new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(checkedAt);
       status.textContent = [places.length ? text.scope : text.empty, stale && text.saved + ' ' + date].filter(Boolean).join(' · ');
       retry.hidden = !stale;
@@ -220,6 +222,15 @@ export function placesPanel(city, language, signal, open, selection) {
     getDay() { return day.value; },
     onDayChange(listener) { dayListeners.add(listener); },
     setItinerary(value) { itinerary = value; },
+    clearAlternative() { alternative = undefined; map?.clearPreview(); },
+    showAlternative(stop) {
+      alternative = { ...stop, title: stop.names[language] || stop.title };
+      route.focused = false;
+      details.open = true;
+      ensureMap();
+      map?.previewPlace(alternative);
+      mapBox.scrollIntoView({ block: 'center', behavior: 'auto' });
+    },
     setRoute(legs, stops) { route = { legs, stops, focused: route.focused }; map?.setRoute(legs, stops, route.focused); },
     showRoute() {
       route.focused = true;

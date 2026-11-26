@@ -37,7 +37,24 @@ export function placesMap(container, city, places, labels, onSelect) {
   const eventLayer = L.layerGroup().addTo(map);
   const eventMarkers = new Map();
   const routeLayer = L.layerGroup().addTo(map);
+  const previewLayer = L.layerGroup().addTo(map);
   return {
+    clearPreview() { previewLayer.clearLayers(); },
+    previewPlace(stop) {
+      previewLayer.clearLayers();
+      const content = document.createElement('div');
+      const link = document.createElement('a');
+      link.href = stop.url;
+      link.textContent = stop.title;
+      const hours = document.createElement('p');
+      hours.textContent = stop.hours;
+      content.append(link, hours);
+      const icon = L.divIcon({ className: 'place-marker alternative-marker', html: '<span></span>', iconSize: [28, 28], iconAnchor: [14, 14] });
+      const marker = L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title })
+        .bindPopup(content).addTo(previewLayer);
+      map.setView(marker.getLatLng(), 16);
+      marker.openPopup();
+    },
     setRoute(legs, stops, fit = false) {
       routeLayer.clearLayers();
       for (const leg of legs.filter(leg => leg.status === 'ok')) {

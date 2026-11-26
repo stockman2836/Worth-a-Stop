@@ -62,6 +62,16 @@ export function itineraryStore(cityId, storage) {
         : [...stops, stop]);
     },
     remove(day, id) { return change(day, stops => stops.filter(stop => stop.id !== id)); },
+    replace(day, id, replacement, expected) {
+      return change(day, stops => {
+        if (JSON.stringify(stops) !== JSON.stringify(expected)) throw Error('Plan changed');
+        const index = stops.findIndex(stop => stop.id === id);
+        if (index < 0 || stops[index].type !== 'place' || replacement.type !== 'place' ||
+            stops.some(stop => stop.id === replacement.id)) throw Error('Invalid replacement');
+        stops[index] = { ...itineraryStop(replacement, 'place'), duration: stops[index].duration };
+        return stops;
+      });
+    },
     move(day, id, direction) {
       return change(day, stops => {
         const index = stops.findIndex(stop => stop.id === id);

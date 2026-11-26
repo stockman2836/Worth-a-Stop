@@ -48,6 +48,7 @@ export function placesPanel(city, language, signal, open, selection) {
   let map;
   let events = [];
   let selectedEvent;
+  let route = { legs: [], stops: [] };
   const dayListeners = new Set();
   let itinerary;
   let onTimeChange;
@@ -138,6 +139,7 @@ export function placesPanel(city, language, signal, open, selection) {
     mapBox.hidden = false;
     map = placesMap(mapBox, city, [], { ...text, name: place => place.names[language] || place.name }, () => {});
     map.setEvents(events);
+    map.setRoute(route.legs, route.stops, route.focused);
     updateHours();
   }
   let storage;
@@ -173,6 +175,7 @@ export function placesPanel(city, language, signal, open, selection) {
       }
       map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name }, select);
       map.setEvents(events);
+      map.setRoute(route.legs, route.stops, route.focused);
       for (const [index, place] of places.entries()) {
         const item = document.createElement('li');
         const show = document.createElement('button');
@@ -180,7 +183,7 @@ export function placesPanel(city, language, signal, open, selection) {
         show.className = 'show-place';
         show.textContent = place.names[language] || place.name;
         show.setAttribute('aria-pressed', 'false');
-        show.addEventListener('click', () => map.select(index));
+        show.addEventListener('click', () => { route.focused = false; map.select(index); });
         const link = document.createElement('a');
         link.href = place.url;
         link.textContent = text.source;
@@ -217,12 +220,21 @@ export function placesPanel(city, language, signal, open, selection) {
     getDay() { return day.value; },
     onDayChange(listener) { dayListeners.add(listener); },
     setItinerary(value) { itinerary = value; },
+    setRoute(legs, stops) { route = { legs, stops, focused: route.focused }; map?.setRoute(legs, stops, route.focused); },
+    showRoute() {
+      route.focused = true;
+      details.open = true;
+      ensureMap();
+      map?.setRoute(route.legs, route.stops, true);
+      mapBox.scrollIntoView({ block: 'center', behavior: 'auto' });
+    },
     planButton(item, type) { return itinerary.button(item, type); },
     onTimeChange(listener) { onTimeChange = listener; },
     eventInfo,
     eventVisible(event) { return !filter.checked || eventInfo(event).available; },
     setEvents(value) { events = value; selectedEvent = undefined; map?.setEvents(events); updateHours(); },
     selectEvent(event) {
+      route.focused = false;
       selectedEvent = event;
       if (filter.checked && !eventInfo(event).available) { filter.checked = false; updateHours(); }
       details.open = true;

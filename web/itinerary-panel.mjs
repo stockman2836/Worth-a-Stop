@@ -1,5 +1,6 @@
 import { itineraryStop, itineraryStore } from './itinerary.mjs';
 import { nextDate, todayIn } from './day-agenda.mjs';
+import { walkingPanel } from './walking-panel.mjs';
 
 const copy = {
   ru: { title: 'План дня', date: 'Дата плана', add: 'Добавить в план', empty: 'Добавьте места и события из подборки.',
@@ -44,6 +45,8 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
   const status = document.createElement('p');
   status.setAttribute('role', 'status');
   element.append(title, label, zone, list, status);
+  const walking = walkingPanel(language, timeline, signal);
+  element.append(walking.element);
   const when = new Intl.DateTimeFormat(language, { timeZone: city.timezone || 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   function button(labelText, action) {
@@ -93,6 +96,7 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
       list.append(item);
     }
     status.textContent = [feedback, !result.stops.length && text.empty, result.saved ? text.saved : text.temporary].filter(Boolean).join(' ');
+    walking.update(result.stops);
   }
   function setDay(day) {
     try { nextDate(day); } catch { return; }

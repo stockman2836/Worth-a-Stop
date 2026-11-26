@@ -1,4 +1,5 @@
 import { nextDate } from './day-agenda.mjs';
+import { eventLocation } from './event-location.mjs';
 
 const memory = new Map();
 
@@ -10,8 +11,9 @@ export function itineraryStop(item, type) {
   }
   const start = type === 'event' && Number.isFinite(item.start) && Number.isFinite(new Date(item.start).getTime()) ? item.start : null;
   const end = type === 'event' && Number.isFinite(item.end) && Number.isFinite(new Date(item.end).getTime()) ? item.end : null;
+  const location = eventLocation(item.location?.latitude ?? item.latitude, item.location?.longitude ?? item.longitude);
   return { id: JSON.stringify([type, url.href, start]), type, title, url: url.href,
-    names: item.names || {}, venue: item.venue || null, start, end, duration: null };
+    names: item.names || {}, venue: item.venue || null, start, end, duration: null, ...(location && { location }) };
 }
 
 export function itineraryStore(cityId, storage) {
@@ -52,7 +54,11 @@ export function itineraryStore(cityId, storage) {
   }
   return {
     read,
-    add(day, stop) { return change(day, stops => stops.some(s => s.id === stop.id) ? stops : [...stops, stop]); },
+    add(day, stop) {
+      return change(day, stops => stops.some(s => s.id === stop.id)
+        ? stops.map(existing => existing.id === stop.id && stop.location ? { ...existing, location: stop.location } : existing)
+        : [...stops, stop]);
+    },
     remove(day, id) { return change(day, stops => stops.filter(stop => stop.id !== id)); },
     move(day, id, direction) {
       return change(day, stops => {

@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { officialCalendars } from '../src/official-calendars.mjs';
 import { officialEvents } from '../src/official-events.mjs';
 import { nearbyPlaces } from '../src/places.mjs';
+import { createWalkingRouter } from '../src/walking-router.mjs';
 
 const assets = new Map([
   ['/', ['../web/index.html', 'text/html']],
@@ -13,6 +14,8 @@ const assets = new Map([
   ['/places-panel.mjs', ['../web/places-panel.mjs', 'text/javascript']],
   ['/itinerary-panel.mjs', ['../web/itinerary-panel.mjs', 'text/javascript']],
   ['/itinerary.mjs', ['../src/itinerary.mjs', 'text/javascript']],
+  ['/walking-legs.mjs', ['../src/walking-legs.mjs', 'text/javascript']],
+  ['/walking-panel.mjs', ['../web/walking-panel.mjs', 'text/javascript']],
   ['/places-map.mjs', ['../web/places-map.mjs', 'text/javascript']],
   ['/opening-hours.mjs', ['../src/opening-hours.mjs', 'text/javascript']],
   ['/event-state.mjs', ['../src/event-state.mjs', 'text/javascript']],
@@ -29,7 +32,23 @@ const assets = new Map([
 ]);
 
 const placesCache = new Map();
+const walkingRoute = createWalkingRouter();
 const server = createServer(async (request, response) => {
+  if (request.method === 'GET' && request.url.startsWith('/api/walking?')) {
+    const params = new URLSearchParams(request.url.slice('/api/walking?'.length));
+    const values = ['fromLat', 'fromLon', 'toLat', 'toLon'].map(key => params.get(key));
+    if (values.some(value => !value?.trim()) || values.some((value, i) =>
+      !Number.isFinite(Number(value)) || Math.abs(Number(value)) > (i % 2 === 0 ? 90 : 180))) {
+      response.writeHead(400).end();
+      return;
+    }
+    try {
+      const [fromLat, fromLon, toLat, toLon] = values.map(Number);
+      const route = await walkingRoute({ latitude: fromLat, longitude: fromLon }, { latitude: toLat, longitude: toLon });
+      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, max-age=3600' }).end(JSON.stringify(route));
+    } catch { response.writeHead(502).end(); }
+    return;
+  }
   if (request.method === 'GET' && request.url.startsWith('/api/places?')) {
     const params = new URLSearchParams(request.url.slice('/api/places?'.length));
     const latitude = Number(params.get('lat'));

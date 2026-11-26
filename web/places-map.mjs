@@ -36,7 +36,28 @@ export function placesMap(container, city, places, labels, onSelect) {
   resize.observe(container);
   const eventLayer = L.layerGroup().addTo(map);
   const eventMarkers = new Map();
+  const routeLayer = L.layerGroup().addTo(map);
   return {
+    setRoute(legs, stops, fit = false) {
+      routeLayer.clearLayers();
+      for (const leg of legs.filter(leg => leg.status === 'ok')) {
+        L.polyline(leg.geometry.coordinates.map(([lon, lat]) => [lat, lon]), {
+          color: '#16485c', weight: 5, opacity: .8, className: 'walking-route',
+        }).addTo(routeLayer);
+      }
+      for (const [index, stop] of stops.entries()) {
+        if (!stop.location) continue;
+        const popup = document.createElement('a');
+        popup.href = stop.url;
+        popup.textContent = stop.title;
+        const icon = L.divIcon({ className: 'route-stop', html: String(index + 1), iconSize: [28, 28], iconAnchor: [14, 14] });
+        L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title })
+          .bindPopup(popup).addTo(routeLayer);
+      }
+      const points = legs.filter(leg => leg.status === 'ok').flatMap(leg => leg.geometry.coordinates.map(([lon, lat]) => [lat, lon]));
+      points.push(...stops.filter(stop => stop.location).map(stop => [stop.location.latitude, stop.location.longitude]));
+      if (fit && points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16 });
+    },
     setStates(states, onlyAvailable) {
       for (const [i, marker] of markers.entries()) {
         const badge = marker.getPopup().getContent().querySelector('.opening-state');

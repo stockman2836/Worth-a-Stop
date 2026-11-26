@@ -1,6 +1,7 @@
 import { suggestCities } from './cities.mjs';
 import { featuredCities } from './sources.mjs';
 import { calendarsPanel } from './calendar-panel.mjs';
+import { placesPanel } from './places-panel.mjs';
 
 const copy = {
   ru: {
@@ -75,7 +76,7 @@ function renderLanguage() {
   }
 }
 
-function cityRow(city, openId, initialDate, signal) {
+function cityRow(city, openId, initialDate, signal, placesId) {
   const row = document.createElement('li');
   const name = document.createElement('button');
   name.type = 'button';
@@ -97,7 +98,7 @@ function cityRow(city, openId, initialDate, signal) {
     panel.open = true;
     panel.querySelector('summary').focus();
   });
-  row.append(name, area, zone, panel);
+  row.append(name, area, zone, placesPanel(city, language, signal, String(city.id) === placesId), panel);
   return row;
 }
 
@@ -107,7 +108,7 @@ function cancelSearch() {
   requestId++;
 }
 
-async function showSearch(query, openId, openSingle = false, initialDate) {
+async function showSearch(query, openId, openSingle = false, initialDate, placesId) {
   cancelSearch();
   const currentRequest = requestId;
   searchController = new AbortController();
@@ -124,7 +125,7 @@ async function showSearch(query, openId, openSingle = false, initialDate) {
     const { cities, correction } = await suggestCities(query, lookup, language, selectedCountry);
     if (currentRequest !== requestId) return;
     if (!openId && openSingle && cities.length === 1) openId = String(cities[0].id);
-    results.replaceChildren(...cities.map(city => cityRow(city, openId, initialDate, signal)));
+    results.replaceChildren(...cities.map(city => cityRow(city, openId, initialDate, signal, placesId)));
     status.textContent = correction ? text.corrected(correction) : cities.length ? text.found(cities.length) : text.empty;
   } catch {
     if (currentRequest === requestId) status.textContent = text.error;
@@ -169,7 +170,8 @@ for (const button of buttons) {
     renderLanguage();
     if (submittedQuery !== null) {
       const panel = results.querySelector('details[data-city-id][open]');
-      showSearch(submittedQuery, panel?.dataset.cityId, false, panel?.querySelector('input[type=date]')?.value);
+      const placesId = results.querySelector('details[data-places-id][open]')?.dataset.placesId;
+      showSearch(submittedQuery, panel?.dataset.cityId, false, panel?.querySelector('input[type=date]')?.value, placesId);
     }
   });
 }

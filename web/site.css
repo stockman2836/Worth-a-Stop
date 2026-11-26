@@ -54,5 +54,8 @@ input { min-width: 0; flex: 1 1 15rem; padding: .9rem 1rem; border: 1px solid #8
 .event-time { font-variant-numeric: tabular-nums; color: #16485c; }
 .day-events a { font-weight: 600; text-underline-offset: .18rem; }
 .event-venue { display: block; margin-top: .2rem; color: #546770; font-size: .9rem; }
+.places { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr)); gap: .6rem; padding: 0; list-style: none; }
+.places li { background: white; border: 1px solid #d6e0e4; border-radius: .45rem; padding: .8rem 1rem; }
+.places li a { font-weight: 600; }
 footer { flex-wrap: wrap; gap: .4rem; font-size: .875rem; color: #546770; }
 a { color: inherit; }

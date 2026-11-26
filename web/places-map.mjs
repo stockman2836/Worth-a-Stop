@@ -32,8 +32,34 @@ export function placesMap(container, city, places, labels, onSelect) {
   if (markers.length) map.fitBounds(L.latLngBounds(markers.map(marker => marker.getLatLng())), { padding: [32, 32], maxZoom: 16 });
   const resize = new ResizeObserver(() => map.invalidateSize({ pan: false }));
   resize.observe(container);
+  const eventLayer = L.layerGroup().addTo(map);
+  const eventMarkers = new Map();
   return {
     select(index) { map.setView(markers[index].getLatLng(), Math.max(16, map.getZoom())); markers[index].openPopup(); },
+    setEvents(events) {
+      eventLayer.clearLayers();
+      eventMarkers.clear();
+      for (const event of events.filter(event => event.location)) {
+        const popup = document.createElement('div');
+        const title = document.createElement('a');
+        title.href = event.url;
+        title.textContent = event.title;
+        const info = document.createElement('p');
+        info.textContent = [event.mapLabel, event.venue].filter(Boolean).join(' · ');
+        popup.append(title, info);
+        const icon = L.divIcon({ className: 'event-marker', html: '<span></span>', iconSize: [26, 26], iconAnchor: [13, 13] });
+        const marker = L.marker([event.location.latitude, event.location.longitude], {
+          icon, title: event.title + ' · ' + event.mapLabel, alt: event.title,
+        }).bindPopup(popup).addTo(eventLayer);
+        eventMarkers.set(event, marker);
+      }
+      const points = [...markers, ...eventMarkers.values()].map(marker => marker.getLatLng());
+      if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16 });
+    },
+    selectEvent(event) {
+      const marker = eventMarkers.get(event);
+      if (marker) { map.setView(marker.getLatLng(), 16); marker.openPopup(); }
+    },
     destroy() { resize.disconnect(); map.remove(); message.remove(); },
   };
 }

@@ -8,14 +8,14 @@ const copy = {
     park: 'Парк', garden: 'Сад', marketplace: 'Рынок', map: 'Карта мест',
     zoomIn: 'Приблизить', zoomOut: 'Отдалить', unknown: 'Часы работы не указаны',
     tilesError: 'Не удалось загрузить часть карты.', saved: 'Источник недоступен. Показана сохранённая подборка от',
-    source: 'Открыть в OpenStreetMap' },
+    source: 'Открыть в OpenStreetMap', legend: 'Круги — места · ромбы — события выбранного дня' },
   en: { title: 'Nearby places', loading: 'Looking for places…', empty: 'No matching places within 2 km.',
     scope: 'Within 2 km of the centre, straight-line distance', error: 'Could not load places.', retry: 'Try again',
     hours: 'Opening hours', museum: 'Museum', gallery: 'Gallery', viewpoint: 'Viewpoint',
     park: 'Park', garden: 'Garden', marketplace: 'Market', map: 'Map of places',
     zoomIn: 'Zoom in', zoomOut: 'Zoom out', unknown: 'Opening hours unspecified',
     tilesError: 'Some map tiles could not be loaded.', saved: 'Source unavailable. Showing places saved on',
-    source: 'Open in OpenStreetMap' },
+    source: 'Open in OpenStreetMap', legend: 'Circles — places · diamonds — events for the selected day' },
 };
 
 export function placesPanel(city, language, signal, open) {
@@ -35,6 +35,14 @@ export function placesPanel(city, language, signal, open) {
   mapBox.setAttribute('aria-label', text.map + ' · ' + city.name);
   mapBox.hidden = true;
   let map;
+  let events = [];
+  let selectedEvent;
+  function ensureMap() {
+    if (map || !details.open || signal.aborted) return;
+    mapBox.hidden = false;
+    map = placesMap(mapBox, city, [], { ...text, name: place => place.names[language] || place.name }, () => {});
+    map.setEvents(events);
+  }
   let storage;
   try { storage = window.localStorage; } catch { /* Optional saved results. */ }
   signal.addEventListener('abort', () => map?.destroy(), { once: true });
@@ -45,7 +53,9 @@ export function placesPanel(city, language, signal, open) {
   retry.textContent = text.retry;
   retry.type = 'button';
   retry.hidden = true;
-  details.append(summary, status, retry, mapBox, list, credit);
+  const legend = document.createElement('p');
+  legend.textContent = text.legend;
+  details.append(summary, status, retry, mapBox, legend, list, credit);
   const km = new Intl.NumberFormat(language, { style: 'unit', unit: 'kilometer', maximumFractionDigits: 1 });
   const metres = new Intl.NumberFormat(language, { style: 'unit', unit: 'meter', maximumFractionDigits: 0 });
   async function load() {
@@ -57,14 +67,16 @@ export function placesPanel(city, language, signal, open) {
       map?.destroy();
       map = undefined;
       list.replaceChildren();
-      mapBox.hidden = !places.length;
+      mapBox.hidden = false;
       function select(index) {
         for (const [i, item] of [...list.children].entries()) {
           item.classList.toggle('selected', i === index);
           item.querySelector('button').setAttribute('aria-pressed', String(i === index));
         }
       }
-      if (places.length) map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name }, select);
+      map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name }, select);
+      map.setEvents(events);
+      if (selectedEvent && events.includes(selectedEvent)) map.selectEvent(selectedEvent);
       for (const [index, place] of places.entries()) {
         const item = document.createElement('li');
         const show = document.createElement('button');
@@ -92,8 +104,20 @@ export function placesPanel(city, language, signal, open) {
       retry.hidden = false;
     }
   }
-  details.addEventListener('toggle', () => { if (details.open && !status.textContent) load(); });
+  details.addEventListener('toggle', () => {
+    if (details.open) { ensureMap(); if (!status.textContent) load(); }
+  });
   retry.addEventListener('click', load);
   details.open = open;
-  return details;
+  return {
+    element: details,
+    setEvents(value) { events = value; selectedEvent = undefined; map?.setEvents(events); },
+    selectEvent(event) {
+      selectedEvent = event;
+      details.open = true;
+      ensureMap();
+      map?.selectEvent(event);
+      mapBox.scrollIntoView({ block: 'center', behavior: 'auto' });
+    },
+  };
 }

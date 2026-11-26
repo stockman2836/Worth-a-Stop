@@ -1,4 +1,5 @@
 import { nearbyVenues, openAgendaDataset } from './sources.mjs';
+import { eventLocation } from './event-location.mjs';
 
 const isoDay = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -125,7 +126,9 @@ function eventsOnDay(rows, day, dates) {
         const identity = row.location_uid ? [row.location_uid, row.title_fr.trim().normalize().toLowerCase()] : [row.uid];
         const key = JSON.stringify([...identity, timing.start ?? slot.begin]);
         if (!events.has(key)) {
-          events.set(key, withdrawn ? null : { title: row.title_fr, venue: row.location_name, url: link.href, status, ...timing });
+          const location = status === 3 ? undefined : eventLocation(row.location_coordinates?.lat, row.location_coordinates?.lon);
+          events.set(key, withdrawn ? null : { title: row.title_fr, venue: row.location_name, url: link.href, status, ...timing,
+            ...(location && { location }) });
         }
       }
     } catch {
@@ -143,7 +146,7 @@ export async function findDayEvents(city, day, { signal, fetchResponse = fetch }
   async function nearby(radiusKm) {
     const url = new URL(openAgendaDataset + '/exports/json');
     url.search = new URLSearchParams({
-      select: 'uid,title_fr,canonicalurl,location_uid,location_name,timings,status',
+      select: 'uid,title_fr,canonicalurl,location_uid,location_name,location_coordinates,timings,status',
       where: `${nearbyVenues(city, radiusKm)} AND firstdate_begin < date'${next}T00:00:00' AND lastdate_end >= date'${day}T00:00:00'`,
       order_by: 'updatedat desc,uid', timezone,
     });

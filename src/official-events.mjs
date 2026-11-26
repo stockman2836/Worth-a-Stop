@@ -1,5 +1,6 @@
 import { load } from 'cheerio';
 import { officialCalendars, page } from './official-calendars.mjs';
+import { eventLocation } from './event-location.mjs';
 
 function linkedPage(value, base) {
   if (!value || !URL.canParse(value, base)) return null;
@@ -18,10 +19,14 @@ function schemaEvents(node, base, out, parent = {}) {
   if (node.item) schemaEvents(node.item, base, out);
   if (![].concat(node['@type'] || []).some(type => /Event$/.test(type))) return;
   if (/Event(Cancelled|Postponed)$/.test(node.eventStatus)) return;
+  const geo = node.location?.geo || node.geos?.[0] || node.geo;
+  const online = /OnlineEventAttendanceMode$/.test(node.eventAttendanceMode);
+  const location = online ? undefined : geo ? eventLocation(geo.latitude, geo.longitude) : node.location ? undefined : parent.location;
   const listing = {
     title: node.name || parent.title,
     venue: node.location?.name || node.addresses?.[0]?.name || parent.venue,
     url: linkedPage(node.url, base)?.href || parent.url || base.href,
+    ...(location && { location }),
   };
   if (node.subEvent?.length || node.subEvent?.startDate) {
     schemaEvents(node.subEvent, base, out, listing);

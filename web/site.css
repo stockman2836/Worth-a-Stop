@@ -62,6 +62,8 @@ input { min-width: 0; flex: 1 1 15rem; padding: .9rem 1rem; border: 1px solid #8
 #results .places .show-place { border: 0; padding: 0; text-align: left; font-weight: 650; }
 .places li > a { display: inline-block; margin-top: .6rem; font-size: .875rem; font-weight: 400; }
 .place-marker span { display: block; width: 100%; height: 100%; border-radius: 50%; background: #16485c; border: 3px solid white; box-shadow: 0 1px 5px #172e3b80; }
+.event-marker span { display: block; width: 100%; height: 100%; background: #b4541a; border: 3px solid white; border-radius: 4px; transform: rotate(45deg); box-shadow: 0 1px 5px #172e3b80; }
+.show-event { margin-top: .5rem; }
 .leaflet-popup-content { font: .95rem/1.5 "Inter", "Segoe UI", sans-serif; }
 .map-status:empty { display: none; }
 footer { flex-wrap: wrap; gap: .4rem; font-size: .875rem; color: #546770; }

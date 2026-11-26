@@ -5,6 +5,7 @@ const copy = {
     today: 'Сегодня', tomorrow: 'Завтра', date: 'Дата поездки', loading: 'Ищем события…',
     empty: 'В проверенных афишах нет событий на этот день', partial: 'Показаны результаты из доступной части афиш',
     official: 'Городская афиша', waiting: 'Проверяем остальные источники…',
+    showMap: 'Показать на карте', noLocation: 'Точное расположение не указано',
     error: 'Не удалось загрузить расписания.', retry: 'Попробовать снова', more: 'Ещё события',
     count: n => `Событий в афише — ${n}`, area: km => `До ${km} км от центра`,
     unknown: 'Время не указано', allDay: 'Весь день', until: t => `До ${t}`, from: t => `С ${t}`,
@@ -14,6 +15,7 @@ const copy = {
     today: 'Today', tomorrow: 'Tomorrow', date: 'Trip date', loading: 'Looking up events…',
     empty: 'No events found for this day in the listings checked', partial: 'Only part of the listings could be checked',
     official: 'City calendar', waiting: 'Checking the remaining sources…',
+    showMap: 'Show on map', noLocation: 'Exact location unspecified',
     error: 'Could not load the schedules.', retry: 'Try again', more: 'More events',
     count: n => `${n} ${n === 1 ? 'event' : 'events'} listed`, area: km => `Within ${km} km of the centre`,
     unknown: 'Time unspecified', allDay: 'All day', until: t => `Until ${t}`, from: t => `From ${t}`,
@@ -30,7 +32,7 @@ function timeLabel(event, clock, text) {
   return event.end === null ? start : `${start}–${clock.format(event.end)}`;
 }
 
-export function dayPanel(city, language, initialDate, searchSignal) {
+export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
   const view = document.querySelector('#day-agenda').content.firstElementChild.cloneNode(true);
   const input = view.querySelector('input');
   const [today, tomorrow] = view.querySelectorAll('[data-day]');
@@ -66,6 +68,19 @@ export function dayPanel(city, language, initialDate, searchSignal) {
       venue.className = 'event-venue';
       venue.textContent = [event.venue || text.venue, text.status[event.status], event.begin && text.official].filter(Boolean).join(' · ');
       info.append(link, venue);
+      if (event.location) {
+        const show = document.createElement('button');
+        show.type = 'button';
+        show.className = 'show-event';
+        show.textContent = text.showMap;
+        show.addEventListener('click', () => eventMap.selectEvent(event));
+        info.append(show);
+      } else {
+        const unknown = document.createElement('span');
+        unknown.className = 'event-venue';
+        unknown.textContent = text.noLocation;
+        info.append(unknown);
+      }
       item.append(time, info);
       list.append(item);
     }
@@ -81,6 +96,7 @@ export function dayPanel(city, language, initialDate, searchSignal) {
     today.setAttribute('aria-pressed', String(day === localToday));
     tomorrow.setAttribute('aria-pressed', String(day === nextDate(localToday)));
     list.replaceChildren();
+    eventMap.setEvents([]);
     more.hidden = retry.hidden = true;
     message.textContent = '';
     if (!day || !input.validity.valid) return;
@@ -92,6 +108,8 @@ export function dayPanel(city, language, initialDate, searchSignal) {
       if (signal.aborted) return;
       finished++;
       events = mergeListings(results.flatMap(r => r.events));
+      for (const event of events) event.mapLabel = timeLabel(event, clock, text);
+      eventMap.setEvents(events);
       const incomplete = results.some(r => r.incomplete) || finished > results.length;
       const area = results.find(r => r.radiusKm)?.radiusKm;
       message.textContent = [events.length ? text.count(events.length) : finished === 2 && results.length && text.empty,

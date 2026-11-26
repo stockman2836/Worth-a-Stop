@@ -2,7 +2,7 @@ import { findSources } from './sources.mjs';
 import { findGuide } from './guides.mjs';
 import { dayPanel } from './day-panel.mjs';
 
-export function calendarsPanel(city, open, language, text, storage, initialDate, signal) {
+export function calendarsPanel(city, open, language, text, storage, initialDate, signal, eventMap) {
   const details = document.createElement('details');
   details.name = 'nearby-calendars';
   details.dataset.cityId = String(city.id);
@@ -103,7 +103,7 @@ export function calendarsPanel(city, open, language, text, storage, initialDate,
   }
   details.addEventListener('toggle', () => {
     if (details.open && !details.querySelector('.day-agenda')) {
-      sources.before(dayPanel(city, language, initialDate, signal));
+      sources.before(dayPanel(city, language, initialDate, signal, eventMap));
     }
   });
   sources.addEventListener('toggle', () => {

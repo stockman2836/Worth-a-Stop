@@ -88,7 +88,8 @@ function cityRow(city, openId, initialDate, signal, placesId) {
   zone.textContent = city.timezone;
   zone.className = 'zone';
   const open = String(city.id) === openId;
-  const panel = calendarsPanel(city, open, language, copy[language], storage, open ? initialDate : undefined, signal);
+  const places = placesPanel(city, language, signal, String(city.id) === placesId);
+  const panel = calendarsPanel(city, open, language, copy[language], storage, open ? initialDate : undefined, signal, places);
   name.addEventListener('click', () => {
     input.value = city.name;
     submittedQuery = city.name;
@@ -98,7 +99,7 @@ function cityRow(city, openId, initialDate, signal, placesId) {
     panel.open = true;
     panel.querySelector('summary').focus();
   });
-  row.append(name, area, zone, placesPanel(city, language, signal, String(city.id) === placesId), panel);
+  row.append(name, area, zone, places.element, panel);
   return row;
 }
 

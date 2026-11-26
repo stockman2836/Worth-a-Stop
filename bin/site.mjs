@@ -16,6 +16,7 @@ const assets = new Map([
   ['/leaflet.mjs', ['../node_modules/leaflet/dist/leaflet-src.esm.js', 'text/javascript']],
   ['/leaflet.css', ['../node_modules/leaflet/dist/leaflet.css', 'text/css']],
   ['/day-agenda.mjs', ['../src/day-agenda.mjs', 'text/javascript']],
+  ['/event-location.mjs', ['../src/event-location.mjs', 'text/javascript']],
   ['/cities.mjs', ['../src/cities.mjs', 'text/javascript']],
   ['/sources.mjs', ['../src/sources.mjs', 'text/javascript']],
   ['/guides.mjs', ['../src/guides.mjs', 'text/javascript']],

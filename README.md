@@ -26,6 +26,8 @@ Open **Nearby places** in a city card to explore up to twelve named markets, par
 
 Each place also appears on an interactive map. Select its name in the list to zoom to its marker and open the published hours and source link. Selecting a marker highlights its list entry. The map uses Leaflet and OpenStreetMap tiles.
 
+Events with published venue coordinates appear as diamond markers on the same map. Select **Show on map** in the daily agenda to open the venue, local session time and publisher link. Changing the trip date replaces the event markers. Events without coordinates remain in the agenda with an explicit location notice. Online events stay in the list. The event map works even when the nearby-place source is unavailable.
+
 The server caches place results for one hour and shares the same lookup across interface languages. If the primary Overpass endpoint fails, it tries a second public endpoint. The browser saves the last successful shortlist for each city centre. If a later request fails, it shows that shortlist with its original check time and a retry button. Without saved results it shows a loading error. Opening hours retain OpenStreetMap notation.
 
 Under **Events by day**, choose Today, Tomorrow or a trip date. The site reads the individual sessions published in OpenAgenda. A multi-day event appears on each day it overlaps, and a recurring performance appears on its scheduled dates. Times use the destination’s time zone, shown alongside the results. When the city has no known time zone, the agenda uses UTC. Switching languages keeps the selected date.

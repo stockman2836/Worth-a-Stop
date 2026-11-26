@@ -1,5 +1,14 @@
 const radius = 2; // kilometres from the geocoder's city centre
-const categories = { tourism: ['museum', 'viewpoint', 'gallery'], leisure: ['park', 'garden'], amenity: ['marketplace'] };
+const categories = {
+  tourism: ['attraction', 'museum', 'viewpoint', 'gallery'],
+  historic: ['castle', 'monument', 'ruins', 'archaeological_site', 'city_gate'],
+  building: ['cathedral'], leisure: ['park', 'garden'], amenity: ['marketplace'],
+};
+
+function importance(tags) {
+  const landmark = tags.building === 'cathedral' || tags.tourism === 'attraction' || categories.historic.includes(tags.historic);
+  return (tags.building === 'cathedral' ? 8 : landmark ? 5 : 0) + (tags.wikidata || tags.wikipedia ? 2 : 0);
+}
 
 function validPoint(lat, lon) {
   return Number.isFinite(lat) && Math.abs(lat) <= 90 && Number.isFinite(lon) && Math.abs(lon) <= 180;
@@ -43,16 +52,31 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch } = {})
   for (const { type, id, lat, lon, center, tags = {} } of elements) {
     const point = center ?? { lat, lon };
     if (!validPoint(point.lat, point.lon) || !['node', 'way', 'relation'].includes(type) || !Number.isSafeInteger(id)) continue;
-    const key = Object.keys(categories).find(k => categories[k].includes(tags[k]));
+    const key = tags.building === 'cathedral' ? 'building' :
+      categories.historic.includes(tags.historic) ? 'historic' : Object.keys(categories).find(k => categories[k].includes(tags[k]));
     const name = tags.name;
     if (!key || !name || ['private', 'no'].includes(tags.access) || tags.opening_hours === 'off') continue;
+    if (key === 'amenity' && (tags.shop || !(
+      type !== 'node' || tags.marketplace || tags.market || tags.wikidata || tags.building === 'marketplace'
+    ))) continue;
     const km = distance(latitude, longitude, point.lat, point.lon);
     if (km <= radius) places.push({ latitude: point.lat, longitude: point.lon, name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
+      rank: importance(tags),
+      identity: tags.wikidata,
       url: `https://www.openstreetmap.org/${type}/${id}` });
   }
-  places.sort((a, b) => a.km - b.km);
-  // Keep the nearest example of each available category before filling the shortlist.
+  places.sort((a, b) => b.rank - a.rank || a.km - b.km);
+  const unique = [];
+  const normalize = value => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().trim();
+  for (const place of places) {
+    const duplicate = unique.some(other => place.identity && place.identity === other.identity ||
+      normalize(place.name) === normalize(other.name) &&
+      distance(place.latitude, place.longitude, other.latitude, other.longitude) < .2);
+    if (!duplicate) unique.push(place);
+  }
+  // Preserve category variety while preferring landmarks and documented places.
   const first = new Map();
-  for (const place of places) if (!first.has(place.category)) first.set(place.category, place);
-  return [...new Set([...first.values(), ...places])].slice(0, 12).sort((a, b) => a.km - b.km);
+  for (const place of unique) if (!first.has(place.category)) first.set(place.category, place);
+  return [...new Set([...first.values(), ...unique])].slice(0, 12)
+    .sort((a, b) => b.rank - a.rank || a.km - b.km).map(({ rank, identity, ...place }) => place);
 }

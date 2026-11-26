@@ -8,14 +8,14 @@ function validPlaces(places) {
 }
 
 export async function loadPlaces(city, { signal, fetchResponse = fetch, storage } = {}) {
-  const key = `worth-a-stop.places.v1.${city.latitude}.${city.longitude}`;
+  const key = `worth-a-stop.places.v2.${city.latitude}.${city.longitude}`;
   let saved;
   try {
     const data = JSON.parse(storage?.getItem(key) ?? 'null');
     if (data && validPlaces(data.places) && Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now()) saved = data;
   } catch { /* Storage is optional. */ }
   try {
-    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, v: '2' });
+    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, v: '3' });
     const response = await fetchResponse('/api/places?' + query, { signal });
     if (!response.ok) throw Error('Places unavailable');
     const places = await response.json();

@@ -1,7 +1,7 @@
 import * as L from './leaflet.mjs';
 
 export function placesMap(container, city, places, labels, onSelect) {
-  const map = L.map(container, { scrollWheelZoom: false, zoomControl: false })
+  const map = L.map(container, { scrollWheelZoom: true, zoomControl: false })
     .setView([city.latitude, city.longitude], 14);
   L.control.zoom({ zoomInTitle: labels.zoomIn, zoomOutTitle: labels.zoomOut }).addTo(map);
   const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {

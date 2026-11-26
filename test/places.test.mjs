@@ -19,11 +19,24 @@ test('uses localized names, published hours and object links with great-circle d
 });
 
 test('keeps a more distant category in the shortlist and handles area centres', async () => {
-  const museums = Array.from({ length: 14 }, (_, i) => ({ ...node, id: i + 10 }));
+  const museums = Array.from({ length: 14 }, (_, i) => ({ ...node, id: i + 10, tags: { ...node.tags, name: 'Museum ' + i } }));
   const places = await query([...museums, { type: 'way', id: 7, center: { lat: 0, lon: .015 }, tags: { leisure: 'park', name: 'City Park' } }]);
   assert.equal(places.length, 12);
   assert.equal(places.at(-1).category, 'park');
   assert.equal(places.at(-1).hours, undefined);
+});
+
+test('rejects an uncorroborated marketplace tag, prioritizes the cathedral and merges duplicate landmark points', async () => {
+  const places = await query([
+    { ...node, id: 20, tags: { name: 'Faxcopy', amenity: 'marketplace', website: 'https://www.faxcopy.sk/' } },
+    { ...node, id: 21, tags: { name: 'Cathedral', tourism: 'attraction', building: 'cathedral', wikidata: 'Q1' } },
+    { ...node, id: 22, tags: { name: 'Cathedral', building: 'cathedral', wikidata: 'Q1' } },
+    { type: 'way', id: 23, center: { lat: 0, lon: .01 }, tags: { name: 'Market', amenity: 'marketplace' } },
+  ]);
+  assert.equal(places.some(place => place.name === 'Faxcopy'), false);
+  assert.equal(places[0].category, 'cathedral');
+  assert.equal(places.filter(place => place.name === 'Cathedral').length, 1);
+  assert.ok(places.some(place => place.category === 'marketplace'));
 });
 
 test('distinguishes an empty area from an incomplete Overpass response', async () => {

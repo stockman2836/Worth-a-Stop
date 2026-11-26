@@ -41,7 +41,7 @@ export async function page(url, redirects = 0) {
 
 export function calendarLink({ url, html }) {
   const $ = load(html);
-  const section = /^(events?|what.s on|calendar of events|event calendar|veranstaltungen|veranstaltungskalender|akce|kalendář akcí|agenda|événements|eventos|eventi|афиша|события)$/iu;
+  const section = /^(events?|what.s on|calendar of events|event calendar|veranstaltungen|veranstaltungskalender|akce|kalendář akcí|podujatia|kalendár podujatí|agenda|événements|eventos|eventi|афиша|события)$/iu;
   for (const a of $('a[href]').toArray()) {
     const href = $(a).attr('href');
     if (!href || href.startsWith('#') || !URL.canParse(href, url)) continue;

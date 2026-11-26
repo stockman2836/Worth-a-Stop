@@ -67,7 +67,8 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
       link.textContent = event.title;
       const venue = document.createElement('span');
       venue.className = 'event-venue';
-      venue.textContent = [event.venue || text.venue, text.status[event.status], event.begin && text.official].filter(Boolean).join(' · ');
+      venue.textContent = [event.venue || text.venue, text.status[event.status], event.begin && text.official,
+        event.publishedTime].filter(Boolean).join(' · ');
       info.append(link, venue);
       const phase = document.createElement('span');
       phase.className = 'event-state';

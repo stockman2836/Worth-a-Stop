@@ -1,6 +1,38 @@
 import { load } from 'cheerio';
 import { officialCalendars, page } from './official-calendars.mjs';
 import { eventLocation } from './event-location.mjs';
+import { readNuxtData } from './embedded-data.mjs';
+
+function embeddedEvents($, base) {
+  const links = $('a[href]').toArray().map(anchor => linkedPage($(anchor).attr('href'), base)).filter(Boolean);
+  const events = new Map();
+  let remaining = 100000;
+  function visit(value) {
+    if (!value || typeof value !== 'object') return;
+    if (--remaining < 0) throw Error('Embedded event limit exceeded');
+    if (typeof value.start_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.start_date) &&
+        typeof value.title === 'string') {
+      const slugs = [value.slug, value.slug_en, value.slug_sk, value.slug_pl, value.slug_hu].filter(Boolean);
+      const link = [base, ...links].find(url => slugs.includes(url.pathname.replace(/\/$/, '').split('/').pop()));
+      if (link) {
+        const single = !value.end_date || value.end_date === value.start_date;
+        const clock = typeof value.time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.time) ? value.time : null;
+        const location = eventLocation(value.google_place?.lat, value.google_place?.lng);
+        events.set(link.href, { title: load(value.title).text(), url: link.href,
+          venue: value.google_place?.name, begin: value.start_date + (single && clock ? 'T' + clock + ':00' : ''),
+          ...(single ? {} : { end: value.end_date, publishedTime: value.time }),
+          ...(location && { location }) });
+      }
+    }
+    for (const item of Object.values(value)) if (item && typeof item === 'object') visit(item);
+  }
+  for (const script of $('script').toArray()) {
+    const source = $(script).text();
+    if (!source.includes('window.__NUXT__')) continue;
+    try { visit(readNuxtData(source)); } catch { /* Unsupported payloads can use other published formats. */ }
+  }
+  return [...events.values()];
+}
 
 function linkedPage(value, base) {
   if (!value || !URL.canParse(value, base)) return null;
@@ -49,6 +81,8 @@ export function publishedEvents({ html, url }) {
     schemaEvents(json, url, events);
   }
   if (events.length) return events;
+  events.push(...embeddedEvents($, url));
+  if (events.length) return events;
   const title = $('h1').first().text().trim();
   const venue = $('.article-head__top').parent().find('p a[href*="/objevujte/"]').first().text().trim();
   for (const el of $('[data-date_list]').toArray()) {
@@ -71,7 +105,7 @@ async function collect(calendar) {
   const events = publishedEvents(index);
   if (events.length) return { events, incomplete: false };
   const $ = load(index.html);
-  const prefix = index.url.pathname.replace(/\/?$/, '/');
+  const prefix = index.url.pathname.replace(/\/(?:categories?|kategorie)\/.*$/, '/').replace(/\/?$/, '/');
   const links = new Set();
   for (const el of $('main a[href], article a[href]').toArray()) {
     const url = linkedPage($(el).attr('href'), index.url);

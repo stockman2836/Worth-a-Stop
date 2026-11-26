@@ -38,7 +38,39 @@ export function placesMap(container, city, places, labels, onSelect) {
   const eventMarkers = new Map();
   const routeLayer = L.layerGroup().addTo(map);
   const previewLayer = L.layerGroup().addTo(map);
+  const originLayer = L.layerGroup().addTo(map);
+  let picker;
+  function selectStart(latlng) {
+    if (!picker) return;
+    const action = picker;
+    picker = undefined;
+    container.classList.remove('picking-start');
+    const point = latlng.wrap();
+    action.pick({ latitude: point.lat, longitude: point.lng });
+  }
+  map.on('click', event => selectStart(event.latlng));
+  function keydown(event) {
+    if (!picker) return;
+    if (event.key === 'Enter') { event.preventDefault(); selectStart(map.getCenter()); }
+    if (event.key === 'Escape') {
+      const action = picker;
+      picker = undefined;
+      container.classList.remove('picking-start');
+      action.cancel();
+    }
+  }
+  container.addEventListener('keydown', keydown);
   return {
+    pickStart(pick, cancel) { picker = { pick, cancel }; container.classList.add('picking-start'); container.focus(); },
+    cancelStart() { picker = undefined; container.classList.remove('picking-start'); },
+    setOrigin(point, title) {
+      originLayer.clearLayers();
+      if (!point) return;
+      const content = document.createElement('span');
+      content.textContent = title;
+      const icon = L.divIcon({ className: 'route-stop origin-marker', html: 'S', iconSize: [28, 28], iconAnchor: [14, 14] });
+      L.marker([point.latitude, point.longitude], { icon, title, alt: title }).bindPopup(content).addTo(originLayer);
+    },
     clearPreview() { previewLayer.clearLayers(); },
     previewPlace(stop) {
       previewLayer.clearLayers();
@@ -63,11 +95,12 @@ export function placesMap(container, city, places, labels, onSelect) {
         }).addTo(routeLayer);
       }
       for (const [index, stop] of stops.entries()) {
-        if (!stop.location) continue;
+        if (!stop.location || stop.type === 'origin') continue;
         const popup = document.createElement('a');
         popup.href = stop.url;
         popup.textContent = stop.title;
-        const icon = L.divIcon({ className: 'route-stop', html: String(index + 1), iconSize: [28, 28], iconAnchor: [14, 14] });
+        const offset = stops[0]?.type === 'origin' ? 1 : 0;
+        const icon = L.divIcon({ className: 'route-stop', html: String(index + 1 - offset), iconSize: [28, 28], iconAnchor: [14, 14] });
         L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title })
           .bindPopup(popup).addTo(routeLayer);
       }
@@ -124,6 +157,6 @@ export function placesMap(container, city, places, labels, onSelect) {
       const marker = eventMarkers.get(event);
       if (marker) { map.setView(marker.getLatLng(), 16); marker.openPopup(); }
     },
-    destroy() { resize.disconnect(); map.remove(); message.remove(); },
+    destroy() { resize.disconnect(); container.removeEventListener('keydown', keydown); map.remove(); message.remove(); },
   };
 }

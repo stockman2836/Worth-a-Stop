@@ -8,7 +8,7 @@ const copy = {
     apply: 'Применить порядок', retry: 'Проверить ещё раз', changed: 'План изменился. Повторите сравнение.',
     error: 'Не удалось проверить перестановку.', valid: 'Вариант проверен для изменившихся посещений и событий.',
     unsafe: 'Вариант содержит конфликт или непроверенное посещение. Исправьте план перед применением.',
-    start: 'Старт — у первой остановки выбранного порядка.', waiting: 'Ожидание', late: 'Опоздание',
+    start: 'Старт — у первой остановки выбранного порядка.', origin: 'Старт — в выбранной точке на карте.', waiting: 'Ожидание', late: 'Опоздание',
     unknown: 'Время неизвестно', hours: { fits: 'Открыто весь визит', 'closed-arrival': 'Закрыто по прибытии',
       'closes-during': 'Закроется во время визита', break: 'Перерыв', unknown: 'Часы требуют проверки', 'unknown-time': 'Время визита неизвестно' },
     reasons: { pair: 'Для сравнения нужны два соседних места.', duration: 'Укажите длительность обоих посещений.',
@@ -19,7 +19,7 @@ const copy = {
     apply: 'Apply this order', retry: 'Check again', changed: 'The plan changed. Compare again.',
     error: 'Could not check this order.', valid: 'Changed visits and events have been checked.',
     unsafe: 'This order has a conflict or an unverified visit. Resolve it before applying.',
-    start: 'The walk starts at the first stop in the chosen order.', waiting: 'Waiting', late: 'Late',
+    start: 'The walk starts at the first stop in the chosen order.', origin: 'The walk starts at the selected map point.', waiting: 'Waiting', late: 'Late',
     unknown: 'Time unknown', hours: { fits: 'Open throughout visit', 'closed-arrival': 'Closed on arrival',
       'closes-during': 'Closes during visit', break: 'Break', unknown: 'Hours need checking', 'unknown-time': 'Visit time unknown' },
     reasons: { pair: 'Two adjacent places are required.', duration: 'Enter both visit durations.',
@@ -99,13 +99,13 @@ export function orderPanel(id, language, timeZone, getContext, apply, signal) {
       const name = stop => stop.names[language] || stop.title;
       const order = document.createElement('ol');
       order.className = 'compared-order';
-      for (const visit of after.visits) {
+      for (const visit of after.visits.filter(visit => visit.stop.type !== 'origin')) {
         const item = document.createElement('li');
         item.textContent = name(visit.stop);
         order.append(item);
       }
       const hint = document.createElement('p');
-      hint.textContent = text.start;
+      hint.textContent = context.stops[0]?.type === 'origin' ? text.origin : text.start;
       const metrics = table(text.metric, [
         [text.walking, before.walkingMinutes === null ? text.unknown : minutes.format(before.walkingMinutes),
           after.walkingMinutes === null ? text.unknown : minutes.format(after.walkingMinutes)],

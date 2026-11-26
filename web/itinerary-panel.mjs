@@ -5,6 +5,7 @@ import { arrivalTimes } from './arrival-times.mjs';
 import { localInstant, visitOpeningState } from './opening-hours.mjs';
 import { alternativesPanel } from './alternatives-panel.mjs';
 import { orderPanel } from './order-panel.mjs';
+import { startingPointStore, withStartingPoint } from './starting-point.mjs';
 
 const unsavedStarts = new Map();
 
@@ -14,7 +15,10 @@ const copy = {
     added: 'Остановка добавлена в план.', duplicate: 'Эта остановка уже в плане.', up: 'Выше', down: 'Ниже', remove: 'Убрать',
     minutes: 'Время посещения, мин', unknown: 'Время события не указано', invalid: 'Укажите от 1 до 1440 минут.',
     fixed: 'Время организатора', invalidDate: 'Выберите дату плана.',
-    start: 'Старт у первой остановки', arrival: 'Прибытие', departure: 'Уход', waiting: 'Ожидание',
+    start: 'Время начала прогулки', arrival: 'Прибытие', departure: 'Уход', waiting: 'Ожидание',
+    origin: 'Точка старта', pickOrigin: 'Выбрать старт на карте', resetOrigin: 'Старт у первой остановки',
+    firstOrigin: 'Старт — у первой остановки.', picking: 'Выберите точку на карте.',
+    originUnsaved: 'Точка старта доступна в текущей вкладке.',
     late: 'Опоздание к началу', chooseStart: 'Укажите местное время начала прогулки.',
     invalidStart: 'Это местное время не удалось определить. Выберите другое время.',
     partial: 'Расчёт неполный. Проверьте отмеченные остановки.', finish: 'Ожидаемое завершение',
@@ -36,7 +40,10 @@ const copy = {
     added: 'Stop added to the plan.', duplicate: 'This stop is already in the plan.', up: 'Move up', down: 'Move down', remove: 'Remove',
     minutes: 'Visit duration, min', unknown: 'Event time unspecified', invalid: 'Enter 1 to 1440 minutes.',
     fixed: 'Publisher time', invalidDate: 'Choose a plan date.',
-    start: 'Start at the first stop', arrival: 'Arrival', departure: 'Departure', waiting: 'Waiting',
+    start: 'Walking start time', arrival: 'Arrival', departure: 'Departure', waiting: 'Waiting',
+    origin: 'Starting point', pickOrigin: 'Choose start on map', resetOrigin: 'Start at the first stop',
+    firstOrigin: 'The walk starts at the first stop.', picking: 'Choose a point on the map.',
+    originUnsaved: 'Starting point is available in this tab.',
     late: 'Late for the start', chooseStart: 'Choose a local walking start time.',
     invalidStart: 'This local time could not be resolved. Choose another time.',
     partial: 'The schedule is incomplete. Check the marked stops.', finish: 'Estimated finish',
@@ -58,6 +65,8 @@ const copy = {
 export function itineraryPanel(city, language, timeline, storage, signal) {
   const text = copy[language];
   const store = itineraryStore(city.id, storage);
+  const points = startingPointStore(city.id, storage);
+  let origin = null;
   const element = document.createElement('section');
   element.className = 'itinerary';
   const title = document.createElement('h2');
@@ -90,10 +99,26 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
   startInput.type = 'time';
   startInput.step = '60';
   startLabel.append(text.start, startInput);
+  const originControls = document.createElement('div');
+  originControls.className = 'itinerary-actions origin-controls';
+  const chooseOrigin = button(text.pickOrigin, () => {
+    originStatus.textContent = text.picking;
+    timeline.pickStart(point => {
+      points.set(activeDay, point);
+      render();
+    }, showOriginStatus);
+  });
+  chooseOrigin.className = 'choose-origin';
+  const resetOrigin = button(text.resetOrigin, () => { points.set(activeDay, null); render(); });
+  resetOrigin.className = 'reset-origin';
+  const originStatus = document.createElement('p');
+  originStatus.className = 'origin-status';
+  originStatus.setAttribute('role', 'status');
+  originControls.append(chooseOrigin, resetOrigin);
   const timingStatus = document.createElement('p');
   timingStatus.className = 'timing-status';
   timingStatus.setAttribute('role', 'status');
-  element.append(title, label, startLabel, zone, timingStatus, list, status);
+  element.append(title, label, startLabel, originControls, originStatus, zone, timingStatus, list, status);
   let currentStops = [];
   let routeLegs = [];
   let replacementController;
@@ -112,14 +137,23 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
   element.append(walking.element);
   const when = new Intl.DateTimeFormat(language, { timeZone: city.timezone || 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const minutes = new Intl.NumberFormat(language, { style: 'unit', unit: 'minute', maximumFractionDigits: 0 });
+  const coordinate = new Intl.NumberFormat(language, { maximumFractionDigits: 5 });
+  function showOriginStatus() {
+    const value = points.read(activeDay);
+    originStatus.textContent = [value.point ? text.origin + ' · ' + coordinate.format(value.point.latitude) + ' · ' +
+      coordinate.format(value.point.longitude) : text.firstOrigin, !value.saved && text.originUnsaved].filter(Boolean).join(' ');
+    resetOrigin.disabled = !value.point;
+  }
   function replacementContext() {
-    return { day: activeDay, stops: store.read(activeDay).stops, legs: routeLegs,
+    const savedStops = store.read(activeDay).stops;
+    return { day: activeDay, savedStops, stops: withStartingPoint(savedStops, points.read(activeDay).point, text.origin), legs: routeLegs,
       start: localInstant(activeDay, startInput.value, city.timezone || 'UTC') };
   }
 
   function updateArrivals() {
     const start = localInstant(activeDay, startInput.value, city.timezone || 'UTC');
-    const times = arrivalTimes(currentStops, routeLegs, start);
+    const routeStops = withStartingPoint(currentStops, origin, text.origin);
+    const times = arrivalTimes(routeStops, routeLegs, start).slice(origin && currentStops.length ? 1 : 0);
     let conflicts = 0;
     for (const [index, item] of [...list.children].entries()) {
       const time = times[index];
@@ -171,11 +205,15 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
     return button;
   }
   function render(result = store.read(activeDay), feedback = '') {
+    timeline.cancelStartSelection();
     timeline.clearAlternative();
     replacementController?.abort();
     replacementController = new AbortController();
     alternativePanels = [];
     currentStops = result.stops;
+    origin = points.read(activeDay).point;
+    timeline.setOrigin(origin);
+    showOriginStatus();
     list.replaceChildren();
     for (const [index, stop] of result.stops.entries()) {
       const item = document.createElement('li');
@@ -215,14 +253,14 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
         const alternatives = alternativesPanel(stop, language, city.timezone, replacementContext,
           (context, id, replacement) => {
             if (context.day !== activeDay || readStart() !== startInput.value) throw Error('Plan changed');
-            render(store.replace(activeDay, id, replacement, context.stops), text.replaced);
+            render(store.replace(activeDay, id, replacement, context.savedStops), text.replaced);
           }, timeline, storage, AbortSignal.any([signal, replacementController.signal]));
         alternativePanels.push(alternatives);
         item.append(alternatives.element);
         if (result.stops[index + 1]?.type === 'place') {
           const order = orderPanel(stop.id, language, city.timezone, replacementContext, (context, id) => {
             if (context.day !== activeDay || readStart() !== startInput.value) throw Error('Plan changed');
-            render(store.swapAdjacent(activeDay, id, context.stops), text.reordered);
+            render(store.swapAdjacent(activeDay, id, context.savedStops), text.reordered);
           }, AbortSignal.any([signal, replacementController.signal]));
           alternativePanels.push(order);
           item.append(order.element);
@@ -239,7 +277,7 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
       list.append(item);
     }
     status.textContent = [feedback, !result.stops.length && text.empty, result.saved ? text.saved : text.temporary].filter(Boolean).join(' ');
-    walking.update(result.stops);
+    walking.update(withStartingPoint(result.stops, origin, text.origin));
     updateArrivals();
   }
   function setDay(day) {

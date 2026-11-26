@@ -13,6 +13,7 @@ const copy = {
     tilesError: 'Не удалось загрузить часть карты.', saved: 'Источник недоступен. Показана сохранённая подборка от',
     source: 'Открыть в OpenStreetMap', legend: 'Круги — места · ромбы — события выбранного дня',
     date: 'Дата проверки', time: 'Местное время', open: 'Открыто', closed: 'Закрыто', uncertain: 'Время работы неизвестно',
+    origin: 'Точка старта', pickHint: 'Нажмите на карту для выбора старта. С клавиатуры перемещайте карту стрелками и нажмите Enter. Escape отменяет выбор.', cancelPick: 'Отменить выбор старта',
     timeline: 'Время на карте', available: 'Доступно сейчас', ongoing: 'Идёт', soon: 'Начнётся в течение часа',
     upcoming: 'Позже', ended: 'Завершилось', eventUnknown: 'Время события неизвестно',
     filtered: (places, events) => `Доступно мест — ${places}, событий — ${events}. Неизвестное расписание скрыто.` },
@@ -24,6 +25,7 @@ const copy = {
     tilesError: 'Some map tiles could not be loaded.', saved: 'Source unavailable. Showing places saved on',
     source: 'Open in OpenStreetMap', legend: 'Circles — places · diamonds — events for the selected day',
     date: 'Check date', time: 'Local time', open: 'Open', closed: 'Closed', uncertain: 'Opening hours unknown',
+    origin: 'Starting point', pickHint: 'Click the map to choose a start. With the keyboard, pan using arrow keys and press Enter. Escape cancels.', cancelPick: 'Cancel start selection',
     timeline: 'Map time', available: 'Available now', ongoing: 'Ongoing', soon: 'Starts within an hour',
     upcoming: 'Later', ended: 'Ended', eventUnknown: 'Event time unknown',
     filtered: (places, events) => `Available places — ${places}, events — ${events}. Unknown schedules are hidden.` },
@@ -50,6 +52,24 @@ export function placesPanel(city, language, signal, open, selection) {
   let selectedEvent;
   let alternative;
   let route = { legs: [], stops: [] };
+  let origin = null;
+  let startSelection;
+  function cancelStartSelection() {
+    const action = startSelection;
+    startSelection = undefined;
+    pickerBox.hidden = true;
+    map?.cancelStart();
+    action?.cancel();
+  }
+  function configureOrigin() {
+    map.setOrigin(origin, text.origin);
+    if (startSelection) map.pickStart(point => {
+      const action = startSelection;
+      startSelection = undefined;
+      pickerBox.hidden = true;
+      action?.pick(point);
+    }, cancelStartSelection);
+  }
   const dayListeners = new Set();
   let itinerary;
   let onTimeChange;
@@ -141,6 +161,7 @@ export function placesPanel(city, language, signal, open, selection) {
     map = placesMap(mapBox, city, [], { ...text, name: place => place.names[language] || place.name }, () => {});
     map.setEvents(events);
     map.setRoute(route.legs, route.stops, route.focused);
+    configureOrigin();
     updateHours();
   }
   let storage;
@@ -155,7 +176,17 @@ export function placesPanel(city, language, signal, open, selection) {
   retry.hidden = true;
   const legend = document.createElement('p');
   legend.textContent = text.legend;
-  details.append(summary, controls, slider, filterLabel, filterMessage, status, retry, mapBox, legend, list, credit);
+  const pickerBox = document.createElement('div');
+  pickerBox.className = 'start-picker';
+  pickerBox.hidden = true;
+  const pickHint = document.createElement('p');
+  pickHint.textContent = text.pickHint;
+  const cancelPick = document.createElement('button');
+  cancelPick.type = 'button';
+  cancelPick.textContent = text.cancelPick;
+  cancelPick.addEventListener('click', cancelStartSelection);
+  pickerBox.append(pickHint, cancelPick);
+  details.append(summary, controls, slider, filterLabel, filterMessage, status, retry, mapBox, pickerBox, legend, list, credit);
   const km = new Intl.NumberFormat(language, { style: 'unit', unit: 'kilometer', maximumFractionDigits: 1 });
   const metres = new Intl.NumberFormat(language, { style: 'unit', unit: 'meter', maximumFractionDigits: 0 });
   async function load() {
@@ -177,6 +208,7 @@ export function placesPanel(city, language, signal, open, selection) {
       map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name }, select);
       map.setEvents(events);
       map.setRoute(route.legs, route.stops, route.focused);
+      configureOrigin();
       for (const [index, place] of places.entries()) {
         const item = document.createElement('li');
         const show = document.createElement('button');
@@ -222,6 +254,16 @@ export function placesPanel(city, language, signal, open, selection) {
     getDay() { return day.value; },
     onDayChange(listener) { dayListeners.add(listener); },
     setItinerary(value) { itinerary = value; },
+    setOrigin(point) { origin = point; map?.setOrigin(point, text.origin); },
+    cancelStartSelection,
+    pickStart(pick, cancel) {
+      startSelection = { pick, cancel };
+      pickerBox.hidden = false;
+      details.open = true;
+      ensureMap();
+      configureOrigin();
+      mapBox.scrollIntoView({ block: 'center', behavior: 'auto' });
+    },
     clearAlternative() { alternative = undefined; map?.clearPreview(); },
     showAlternative(stop) {
       alternative = { ...stop, title: stop.names[language] || stop.title };

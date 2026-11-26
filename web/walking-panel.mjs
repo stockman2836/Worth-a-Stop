@@ -1,12 +1,12 @@
 import { walkingLegs } from './walking-legs.mjs';
 
 const copy = {
-  ru: { title: 'Пешие переходы', need: 'Добавьте хотя бы две остановки.',
+  ru: { title: 'Пешие переходы', need: 'Добавьте места или события для расчёта переходов.',
     loading: 'Рассчитываем пеший маршрут…', missing: 'Не хватает координат. Добавьте остановку повторно из актуальной подборки.',
     noRoute: 'Пеший путь не найден.', error: 'Не удалось рассчитать этот переход.', retry: 'Повторить расчёт',
     map: 'Маршрут на карте', total: 'Всего пешком по оценке маршрутизатора', partial: 'Рассчитанные участки',
     estimate: 'Оценка времени' },
-  en: { title: 'Walking between stops', need: 'Add at least two stops.',
+  en: { title: 'Walking between stops', need: 'Add places or events to calculate walking legs.',
     loading: 'Calculating the walking route…', missing: 'Coordinates missing. Add the stop again from the current suggestions.',
     noRoute: 'No walking path found.', error: 'Could not calculate this leg.', retry: 'Try again',
     map: 'Show route on map', total: 'Estimated walking total', partial: 'Calculated legs',

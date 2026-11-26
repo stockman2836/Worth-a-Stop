@@ -19,7 +19,8 @@ export function arrivalTimes(stops, legs, start) {
     let late = 0;
     departure = null;
     if (arrival !== null) {
-      if (stop.type === 'place') {
+      if (stop.type === 'origin') departure = arrival;
+      else if (stop.type === 'place') {
         if (Number.isInteger(stop.duration) && stop.duration >= 1 && stop.duration <= 1440) {
           departure = arrival + stop.duration * 60000;
         } else reason = 'visit-duration';

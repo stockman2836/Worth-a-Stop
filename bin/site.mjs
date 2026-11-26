@@ -19,6 +19,8 @@ const assets = new Map([
   ['/arrival-times.mjs', ['../src/arrival-times.mjs', 'text/javascript']],
   ['/alternatives.mjs', ['../src/alternatives.mjs', 'text/javascript']],
   ['/alternatives-panel.mjs', ['../web/alternatives-panel.mjs', 'text/javascript']],
+  ['/stop-order.mjs', ['../src/stop-order.mjs', 'text/javascript']],
+  ['/order-panel.mjs', ['../web/order-panel.mjs', 'text/javascript']],
   ['/alternatives.mjs', ['../src/alternatives.mjs', 'text/javascript']],
   ['/places-map.mjs', ['../web/places-map.mjs', 'text/javascript']],
   ['/opening-hours.mjs', ['../src/opening-hours.mjs', 'text/javascript']],

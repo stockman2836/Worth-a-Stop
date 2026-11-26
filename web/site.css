@@ -100,6 +100,10 @@ input { min-width: 0; flex: 1 1 15rem; padding: .9rem 1rem; border: 1px solid #8
 .alternatives li { background: #f7fafb; padding: .8rem; border: 1px solid #d6e0e4; margin-block: .5rem; }
 .alternatives button { margin-right: .5rem; }
 .alternative-marker span { background: #b4541a; }
+.order-comparison { margin-block: .75rem; overflow-x: auto; }
+.order-comparison table { border-collapse: collapse; width: 100%; margin-block: 1rem; font-size: .9rem; }
+.order-comparison th, .order-comparison td { padding: .6rem; border: 1px solid #d6e0e4; text-align: left; vertical-align: top; }
+.order-comparison thead { background: #f7fafb; }
 .leaflet-popup-content { font: .95rem/1.5 "Inter", "Segoe UI", sans-serif; }
 .map-status:empty { display: none; }
 footer { flex-wrap: wrap; gap: .4rem; font-size: .875rem; color: #546770; }

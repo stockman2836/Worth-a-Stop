@@ -4,6 +4,7 @@ import { walkingPanel } from './walking-panel.mjs';
 import { arrivalTimes } from './arrival-times.mjs';
 import { localInstant, visitOpeningState } from './opening-hours.mjs';
 import { alternativesPanel } from './alternatives-panel.mjs';
+import { orderPanel } from './order-panel.mjs';
 
 const unsavedStarts = new Map();
 
@@ -25,6 +26,7 @@ const copy = {
     visitUnknown: 'Для проверки часов работы нужно рассчитать время посещения.',
     conflicts: count => `Конфликтов с часами работы — ${count}.`,
     replaced: 'Остановка заменена. Переходы и расписание пересчитываются.',
+    reordered: 'Порядок применён. Переходы и расписание пересчитываются.',
     reasons: { 'start-time': 'Не задано время старта.', 'previous-stop': 'Неизвестно время ухода с предыдущей остановки.',
       'walking-leg': 'Нужен рассчитанный пеший переход.', 'visit-duration': 'Укажите длительность посещения.',
       'event-time': 'Время начала события неизвестно.', 'event-end': 'Время окончания события неизвестно.',
@@ -46,6 +48,7 @@ const copy = {
     visitUnknown: 'Calculate the visit times to check opening hours.',
     conflicts: count => `Opening-hour conflicts — ${count}.`,
     replaced: 'Stop replaced. Recalculating walking legs and schedule.',
+    reordered: 'Order applied. Recalculating walking legs and schedule.',
     reasons: { 'start-time': 'Start time unspecified.', 'previous-stop': 'Previous departure time is unknown.',
       'walking-leg': 'A calculated walking leg is needed.', 'visit-duration': 'Enter the visit duration.',
       'event-time': 'Event start time is unknown.', 'event-end': 'Event end time is unknown.',
@@ -216,6 +219,14 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
           }, timeline, storage, AbortSignal.any([signal, replacementController.signal]));
         alternativePanels.push(alternatives);
         item.append(alternatives.element);
+        if (result.stops[index + 1]?.type === 'place') {
+          const order = orderPanel(stop.id, language, city.timezone, replacementContext, (context, id) => {
+            if (context.day !== activeDay || readStart() !== startInput.value) throw Error('Plan changed');
+            render(store.swapAdjacent(activeDay, id, context.stops), text.reordered);
+          }, AbortSignal.any([signal, replacementController.signal]));
+          alternativePanels.push(order);
+          item.append(order.element);
+        }
       }
       const actions = document.createElement('div');
       actions.className = 'itinerary-actions';

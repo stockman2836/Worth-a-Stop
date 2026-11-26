@@ -48,6 +48,10 @@ Open **Find a replacement** on a place stop after setting the walking start and 
 
 Each alternative shows its verified visit time, published hours, source link and a map preview. **Replace stop** keeps the visit duration and position in the plan, then recalculates routes and arrival times. Changing the plan, start time or calculated route invalidates previous choices. Saved place suggestions are labelled when the live source is unavailable. Alternative checks use the hours supplied by the place source and the cached walking routes.
 
+Use **Compare order with the next place** for two adjacent place stops. The preview recalculates the affected walking legs and compares the current and swapped orders. It shows walking minutes, finish time, conflicts, unknown information and arrival and departure times for every stop. The walk starts at the first stop in the chosen order.
+
+**Apply this order** is enabled when the changed visits fit their published hours and affected event arrivals can be verified without lateness. Choosing it saves the pair in the new order with the original visit durations. Event positions and published times are preserved. Changing the plan, selected start or route invalidates the preview. Schedule checks use the opening-hours snapshots saved in the plan.
+
 **Walking between stops** calculates each adjacent leg in the saved order using the public FOSSGIS OSRM foot router. It shows distances, estimated walking times and a total when every leg is available. **Show route on map** draws the paths and numbered stops. Reordering or removing stops recalculates the route, while visit-duration edits reuse it.
 
 Missing coordinates leave a gap in the route. Older saved stops can regain coordinates by adding the same stop again from current suggestions, preserving its position and duration. Provider failures offer a retry. Calculated legs are shown individually when the whole itinerary cannot be routed. The router uses paths within 100 metres of the published coordinates, and successful results are cached for one hour. [Routing service and attribution](https://routing.openstreetmap.de/about.html)

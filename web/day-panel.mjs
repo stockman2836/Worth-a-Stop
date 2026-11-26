@@ -75,6 +75,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
       phase.textContent = state.label;
       phase.dataset.state = state.state;
       info.append(phase);
+      info.append(eventMap.planButton(event, 'event'));
       if (event.location) {
         const show = document.createElement('button');
         show.type = 'button';
@@ -145,7 +146,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
   input.addEventListener('change', load);
   more.addEventListener('click', () => showMore());
   retry.addEventListener('click', load);
-  eventMap.onDayChange(value => { input.value = value; load(); });
+  eventMap.onDayChange(value => { if (input.value !== value) { input.value = value; load(); } });
   eventMap.onTimeChange(renderEvents);
   load();
   return view;

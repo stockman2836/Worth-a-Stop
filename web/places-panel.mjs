@@ -48,7 +48,8 @@ export function placesPanel(city, language, signal, open, selection) {
   let map;
   let events = [];
   let selectedEvent;
-  let onDayChange;
+  const dayListeners = new Set();
+  let itinerary;
   let onTimeChange;
   let loadedPlaces = [];
   const zone = city.timezone || 'UTC';
@@ -118,7 +119,12 @@ export function placesPanel(city, language, signal, open, selection) {
       ? text.filtered(states.filter(info => info.state === 'open').length, events.filter(event => eventInfo(event).available).length) : '';
     onTimeChange?.();
   }
-  day.addEventListener('change', () => { updateHours(); onDayChange?.(day.value); });
+  function setDay(value) {
+    day.value = value;
+    updateHours();
+    for (const listener of dayListeners) listener(value);
+  }
+  day.addEventListener('change', () => setDay(day.value));
   clock.addEventListener('input', updateHours);
   clock.addEventListener('change', updateHours);
   slider.addEventListener('input', () => {
@@ -184,7 +190,7 @@ export function placesPanel(city, language, signal, open, selection) {
         info.textContent = [text[place.category], distance, place.hours && text.hours + ' · ' + place.hours].filter(Boolean).join(' · ');
         const badge = document.createElement('span');
         badge.className = 'opening-state';
-        item.append(show, badge, info, link);
+        item.append(show, badge, info, link, itinerary.button(place, 'place'));
         list.append(item);
       }
       loadedPlaces = places;
@@ -207,9 +213,11 @@ export function placesPanel(city, language, signal, open, selection) {
   updateHours();
   return {
     element: details,
-    setDay(value) { day.value = value; updateHours(); },
+    setDay,
     getDay() { return day.value; },
-    onDayChange(listener) { onDayChange = listener; },
+    onDayChange(listener) { dayListeners.add(listener); },
+    setItinerary(value) { itinerary = value; },
+    planButton(item, type) { return itinerary.button(item, type); },
     onTimeChange(listener) { onTimeChange = listener; },
     eventInfo,
     eventVisible(event) { return !filter.checked || eventInfo(event).available; },

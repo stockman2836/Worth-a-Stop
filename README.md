@@ -32,6 +32,10 @@ Drag the time slider or enter a local time to update the map and agenda. Events 
 
 Events with published venue coordinates appear as diamond markers on the same map. Select **Show on map** in the daily agenda to open the venue, local session time and publisher link. Changing the trip date replaces the event markers. Events without coordinates remain in the agenda with an explicit location notice. Online events stay in the list. The event map works even when the nearby-place source is unavailable.
 
+Use **Add to plan** on a place or event to build a Daily itinerary for the selected city and date. Move stops up or down, remove them, and enter visit durations in minutes for places. Durations start blank. Event sessions retain their published start and end times. Repeated clicks keep a single copy of the same stop, while separate sessions can be saved individually.
+
+Plans and the last selected plan date are saved on this device and restored when you reopen the city. Each city and date has its own plan. The selected date is shared with the map and agenda. If storage fails, the interface identifies unsaved changes and retains them in the current tab. Saved events are snapshots of the published schedule at the time they were added. Travel-time calculations and later schedule checks are planned.
+
 The server caches place results for one hour and shares the same lookup across interface languages. If the primary Overpass endpoint fails, it tries a second public endpoint. The browser saves the last successful shortlist for each city centre. If a later request fails, it shows that shortlist with its original check time and a retry button. Without saved results it shows a loading error. Opening hours retain OpenStreetMap notation.
 
 Under **Events by day**, choose Today, Tomorrow or a trip date. The site reads the individual sessions published in OpenAgenda. A multi-day event appears on each day it overlaps, and a recurring performance appears on its scheduled dates. Times use the destination’s time zone, shown alongside the results. When the city has no known time zone, the agenda uses UTC. Switching languages keeps the selected date.

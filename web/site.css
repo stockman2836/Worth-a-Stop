@@ -76,6 +76,15 @@ input { min-width: 0; flex: 1 1 15rem; padding: .9rem 1rem; border: 1px solid #8
 .place-marker[data-state="unknown"] span, .event-marker[data-state="unknown"] span { background: #86743c; }
 .event-state { display: block; font-size: .9rem; color: #546770; margin-top: .25rem; }
 .event-state[data-state="ongoing"] { color: #176042; }
+.itinerary { width: 100%; margin-top: 1rem; padding: 1.25rem; background: white; border: 1px solid #d6e0e4; border-radius: .6rem; }
+.itinerary h2 { margin-top: 0; font-size: 1.3rem; }
+.itinerary ol { padding-left: 1.5rem; }
+.itinerary li { padding-block: 1rem; border-bottom: 1px solid #d6e0e4; }
+.itinerary li > a { font-weight: 600; }
+.itinerary-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .75rem; }
+.itinerary button { font: inherit; padding: .45rem .7rem; background: transparent; color: #16485c; border: 1px solid #8ea2ac; border-radius: .35rem; }
+.itinerary button:disabled { opacity: .5; cursor: default; }
+.itinerary input[type=number] { width: 6rem; margin-top: .5rem; }
 .leaflet-popup-content { font: .95rem/1.5 "Inter", "Segoe UI", sans-serif; }
 .map-status:empty { display: none; }
 footer { flex-wrap: wrap; gap: .4rem; font-size: .875rem; color: #546770; }

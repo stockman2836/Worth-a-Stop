@@ -2,6 +2,7 @@ import { suggestCities } from './cities.mjs';
 import { featuredCities } from './sources.mjs';
 import { calendarsPanel } from './calendar-panel.mjs';
 import { placesPanel } from './places-panel.mjs';
+import { itineraryPanel } from './itinerary-panel.mjs';
 
 const copy = {
   ru: {
@@ -89,6 +90,9 @@ function cityRow(city, openId, initialDate, signal, placesId, selection) {
   zone.className = 'zone';
   const open = String(city.id) === openId;
   const places = placesPanel(city, language, signal, String(city.id) === placesId, selection);
+  const itinerary = itineraryPanel(city, language, places, storage, signal);
+  itinerary.element.hidden = !open && String(city.id) !== placesId;
+  places.setItinerary(itinerary);
   const panel = calendarsPanel(city, open, language, copy[language], storage, open ? initialDate : undefined, signal, places);
   name.addEventListener('click', () => {
     input.value = city.name;
@@ -97,9 +101,12 @@ function cityRow(city, openId, initialDate, signal, placesId, selection) {
     results.replaceChildren(row);
     status.textContent = '';
     panel.open = true;
+    itinerary.element.hidden = false;
     panel.querySelector('summary').focus();
   });
-  row.append(name, area, zone, places.element, panel);
+  places.element.addEventListener('toggle', () => { if (places.element.open) itinerary.element.hidden = false; });
+  panel.addEventListener('toggle', () => { if (panel.open) itinerary.element.hidden = false; });
+  row.append(name, area, zone, places.element, panel, itinerary.element);
   return row;
 }
 

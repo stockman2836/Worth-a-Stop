@@ -12,7 +12,7 @@ function website(value) {
 }
 
 // Resolve each redirect independently and connect to the vetted address.
-async function page(url, redirects = 0) {
+export async function page(url, redirects = 0) {
   if (!url || redirects > 4 || !/^[a-z\d.-]+\.[a-z]{2,}$/i.test(url.hostname)) throw Error('Invalid portal URL');
   const { address, family } = await lookup(url.hostname);
   if (ipaddr.process(address).range() !== 'unicast') throw Error('Invalid portal address');

@@ -49,6 +49,55 @@ function parseField(value) {
   return typeof value === 'string' ? JSON.parse(value) : value;
 }
 
+function withOffset(value, offsets) {
+  if (!value || !/^\d{4}-\d\d-\d\dT\d\d:\d\d(?::\d\d)?$/.test(value)) return value;
+  const wall = Date.parse(value + 'Z');
+  let guess = wall;
+  for (let i = 0; i < 3; i++) {
+    const zone = offsets.formatToParts(guess).find(p => p.type === 'timeZoneName').value;
+    const offset = zone.slice(3) || '+00:00';
+    const next = Date.parse(value + offset);
+    if (next === guess) return value + offset;
+    guess = next;
+  }
+  throw Error('Unresolvable local time');
+}
+
+export function officialOnDay(data, day, zone) {
+  const dates = localDates(zone);
+  const offsets = new Intl.DateTimeFormat('en', { timeZone: zone, timeZoneName: 'longOffset' });
+  const events = [];
+  let incomplete = data.incomplete;
+  for (const event of data.events) {
+    try {
+      let { begin, end } = event;
+      if (event.daily && end && begin.slice(0, 10) !== end.slice(0, 10)) {
+        if (day < begin.slice(0, 10) || day > end.slice(0, 10)) continue;
+        begin = day + begin.slice(10);
+        end = day + end.slice(10);
+      }
+      if (isoDay.test(end)) end = nextDate(end); // Publication dates include the final day.
+      const timing = slotOnDay({ begin: withOffset(begin, offsets), end: withOffset(end, offsets) }, day, dates);
+      if (timing) events.push({ ...event, ...timing });
+    } catch { incomplete = true; }
+  }
+  return { events, incomplete };
+}
+
+export function mergeListings(events) {
+  const unique = [];
+  const seen = new Set();
+  const normalize = value => (value || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  for (const event of events.toSorted((a, b) => Number(Boolean(b.begin)) - Number(Boolean(a.begin)))) {
+    const place = normalize(event.venue);
+    const keys = [JSON.stringify([event.url, normalize(event.title), event.start])];
+    if (place) keys.push(JSON.stringify([place, normalize(event.title), event.start]));
+    if (!keys.some(key => seen.has(key))) unique.push(event);
+    for (const key of keys) seen.add(key);
+  }
+  return unique.sort((a,b) => (a.start ?? -Infinity) - (b.start ?? -Infinity) || a.title.localeCompare(b.title));
+}
+
 function eventsOnDay(rows, day, dates) {
   if (!Array.isArray(rows)) throw new Error('Invalid OpenAgenda export.');
   const events = new Map();

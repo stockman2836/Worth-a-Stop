@@ -1,18 +1,20 @@
-import { findDayEvents, nextDate, todayIn } from './day-agenda.mjs';
+import { findDayEvents, mergeListings, officialOnDay, nextDate, todayIn } from './day-agenda.mjs';
 
 const copy = {
   ru: {
     today: 'Сегодня', tomorrow: 'Завтра', date: 'Дата поездки', loading: 'Ищем события…',
-    empty: 'У OpenAgenda нет событий на этот день', partial: 'Часть расписания не удалось прочитать',
-    error: 'Не удалось загрузить расписание OpenAgenda.', retry: 'Попробовать снова', more: 'Ещё события',
+    empty: 'В проверенных афишах нет событий на этот день', partial: 'Показаны результаты из доступной части афиш',
+    official: 'Городская афиша', waiting: 'Проверяем остальные источники…',
+    error: 'Не удалось загрузить расписания.', retry: 'Попробовать снова', more: 'Ещё события',
     count: n => `Событий в афише — ${n}`, area: km => `До ${km} км от центра`,
     unknown: 'Время не указано', allDay: 'Весь день', until: t => `До ${t}`, from: t => `С ${t}`,
     venue: 'Площадка не указана', status: { 2: 'Новое расписание', 3: 'Онлайн', 5: 'Мест нет' },
   },
   en: {
     today: 'Today', tomorrow: 'Tomorrow', date: 'Trip date', loading: 'Looking up events…',
-    empty: 'OpenAgenda lists no events for this day', partial: 'Some listings could not be read',
-    error: 'Could not load the OpenAgenda schedule.', retry: 'Try again', more: 'More events',
+    empty: 'No events found for this day in the listings checked', partial: 'Only part of the listings could be checked',
+    official: 'City calendar', waiting: 'Checking the remaining sources…',
+    error: 'Could not load the schedules.', retry: 'Try again', more: 'More events',
     count: n => `${n} ${n === 1 ? 'event' : 'events'} listed`, area: km => `Within ${km} km of the centre`,
     unknown: 'Time unspecified', allDay: 'All day', until: t => `Until ${t}`, from: t => `From ${t}`,
     venue: 'Venue unspecified', status: { 2: 'Rescheduled', 3: 'Online', 5: 'Sold out' },
@@ -49,9 +51,9 @@ export function dayPanel(city, language, initialDate, searchSignal) {
   retry.textContent = text.retry;
   input.value = initialDate || todayIn(zone);
 
-  function showMore() {
+  function showMore(count = 20) {
     const offset = list.childElementCount;
-    for (const event of events.slice(offset, offset + 20)) {
+    for (const event of events.slice(offset, offset + count)) {
       const item = document.createElement('li');
       const time = document.createElement('span');
       time.className = 'event-time';
@@ -62,7 +64,7 @@ export function dayPanel(city, language, initialDate, searchSignal) {
       link.textContent = event.title;
       const venue = document.createElement('span');
       venue.className = 'event-venue';
-      venue.textContent = [event.venue || text.venue, text.status[event.status]].filter(Boolean).join(' · ');
+      venue.textContent = [event.venue || text.venue, text.status[event.status], event.begin && text.official].filter(Boolean).join(' · ');
       info.append(link, venue);
       item.append(time, info);
       list.append(item);
@@ -83,25 +85,33 @@ export function dayPanel(city, language, initialDate, searchSignal) {
     message.textContent = '';
     if (!day || !input.validity.valid) return;
     message.textContent = text.loading;
-    try {
-      const result = await findDayEvents(city, day, { signal });
+    const results = [];
+    let finished = 0;
+    async function receive(request) {
+      try { results.push(await request); } catch { /* The other source can still provide listings. */ }
       if (signal.aborted) return;
-      events = result.events;
-      const summary = events.length ? text.count(events.length) : '';
-      message.textContent = [summary || (!result.incomplete && text.empty), result.incomplete && text.partial,
-        text.area(result.radiusKm), zone].filter(Boolean).join(' · ');
-      retry.hidden = !result.incomplete;
-      showMore();
-    } catch {
-      if (signal.aborted) return;
-      message.textContent = text.error;
-      retry.hidden = false;
+      finished++;
+      events = mergeListings(results.flatMap(r => r.events));
+      const incomplete = results.some(r => r.incomplete) || finished > results.length;
+      const area = results.find(r => r.radiusKm)?.radiusKm;
+      message.textContent = [events.length ? text.count(events.length) : finished === 2 && results.length && text.empty,
+        finished < 2 && text.waiting, !results.length && finished === 2 ? text.error : incomplete && text.partial,
+        area && 'OpenAgenda · ' + text.area(area), zone].filter(Boolean).join(' · ');
+      const visibleCount = Math.max(20, list.childElementCount);
+      list.replaceChildren();
+      retry.hidden = !incomplete;
+      showMore(visibleCount);
     }
+    receive(findDayEvents(city, day, { signal }));
+    receive(fetch('/api/official-events/' + city.id, { signal }).then(async response => {
+      if (!response.ok) throw Error('City calendar unavailable');
+      return officialOnDay(await response.json(), day, zone);
+    }));
   }
   today.addEventListener('click', () => { input.value = todayIn(zone); load(); });
   tomorrow.addEventListener('click', () => { input.value = nextDate(todayIn(zone)); load(); });
   input.addEventListener('change', load);
-  more.addEventListener('click', showMore);
+  more.addEventListener('click', () => showMore());
   retry.addEventListener('click', load);
   load();
   return view;

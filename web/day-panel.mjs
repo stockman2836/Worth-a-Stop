@@ -54,8 +54,9 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
   input.value = initialDate || eventMap.getDay() || todayIn(zone);
 
   function showMore(count = 20) {
+    const visibleEvents = events.filter(eventMap.eventVisible);
     const offset = list.childElementCount;
-    for (const event of events.slice(offset, offset + count)) {
+    for (const event of visibleEvents.slice(offset, offset + count)) {
       const item = document.createElement('li');
       const time = document.createElement('span');
       time.className = 'event-time';
@@ -68,6 +69,12 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
       venue.className = 'event-venue';
       venue.textContent = [event.venue || text.venue, text.status[event.status], event.begin && text.official].filter(Boolean).join(' · ');
       info.append(link, venue);
+      const phase = document.createElement('span');
+      phase.className = 'event-state';
+      const state = eventMap.eventInfo(event);
+      phase.textContent = state.label;
+      phase.dataset.state = state.state;
+      info.append(phase);
       if (event.location) {
         const show = document.createElement('button');
         show.type = 'button';
@@ -84,7 +91,12 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
       item.append(time, info);
       list.append(item);
     }
-    more.hidden = list.childElementCount >= events.length;
+    more.hidden = list.childElementCount >= visibleEvents.length;
+  }
+  function renderEvents() {
+    const count = Math.max(20, list.childElementCount);
+    list.replaceChildren();
+    showMore(count);
   }
 
   async function load() {
@@ -92,6 +104,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
     controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, searchSignal]);
     const day = input.value;
+    events = [];
     eventMap.setDay(day);
     const localToday = todayIn(zone);
     today.setAttribute('aria-pressed', String(day === localToday));
@@ -133,6 +146,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
   more.addEventListener('click', () => showMore());
   retry.addEventListener('click', load);
   eventMap.onDayChange(value => { input.value = value; load(); });
+  eventMap.onTimeChange(renderEvents);
   load();
   return view;
 }

@@ -174,7 +174,8 @@ for (const button of buttons) {
       const placesId = results.querySelector('details[data-places-id][open]')?.dataset.placesId;
       const selectedPlaces = results.querySelector('details[data-places-id][open]');
       const selection = selectedPlaces && { date: selectedPlaces.querySelector('input[type=date]').value,
-        time: selectedPlaces.querySelector('input[type=time]').value };
+        time: selectedPlaces.querySelector('input[type=time]').value,
+        available: selectedPlaces.querySelector('input[type=checkbox]').checked };
       showSearch(submittedQuery, panel?.dataset.cityId, false, panel?.querySelector('input[type=date]')?.value, placesId, selection);
     }
   });

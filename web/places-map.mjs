@@ -37,12 +37,15 @@ export function placesMap(container, city, places, labels, onSelect) {
   const eventLayer = L.layerGroup().addTo(map);
   const eventMarkers = new Map();
   return {
-    setStates(states) {
+    setStates(states, onlyAvailable) {
       for (const [i, marker] of markers.entries()) {
         const badge = marker.getPopup().getContent().querySelector('.opening-state');
         badge.textContent = states[i].label;
         badge.dataset.state = states[i].state;
-        marker.getElement().dataset.state = states[i].state;
+        if (onlyAvailable && states[i].state !== 'open') map.removeLayer(marker);
+        else if (!map.hasLayer(marker)) marker.addTo(map);
+        const element = marker.getElement();
+        if (element) element.dataset.state = states[i].state;
       }
     },
     select(index) { map.setView(markers[index].getLatLng(), Math.max(16, map.getZoom())); markers[index].openPopup(); },
@@ -56,7 +59,9 @@ export function placesMap(container, city, places, labels, onSelect) {
         title.textContent = event.title;
         const info = document.createElement('p');
         info.textContent = [event.mapLabel, event.venue].filter(Boolean).join(' · ');
-        popup.append(title, info);
+        const state = document.createElement('p');
+        state.className = 'event-state';
+        popup.append(title, info, state);
         const icon = L.divIcon({ className: 'event-marker', html: '<span></span>', iconSize: [26, 26], iconAnchor: [13, 13] });
         const marker = L.marker([event.location.latitude, event.location.longitude], {
           icon, title: event.title + ' · ' + event.mapLabel, alt: event.title,
@@ -65,6 +70,17 @@ export function placesMap(container, city, places, labels, onSelect) {
       }
       const points = [...markers, ...eventMarkers.values()].map(marker => marker.getLatLng());
       if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16 });
+    },
+    setEventStates(states, onlyAvailable) {
+      for (const [event, marker] of eventMarkers) {
+        const info = states.get(event);
+        const badge = marker.getPopup().getContent().querySelector('.event-state');
+        badge.textContent = info.label;
+        if (onlyAvailable && !info.available) eventLayer.removeLayer(marker);
+        else if (!eventLayer.hasLayer(marker)) marker.addTo(eventLayer);
+        const element = marker.getElement();
+        if (element) element.dataset.state = info.state;
+      }
     },
     selectEvent(event) {
       const marker = eventMarkers.get(event);

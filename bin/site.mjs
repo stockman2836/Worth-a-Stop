@@ -13,6 +13,7 @@ const assets = new Map([
   ['/places-panel.mjs', ['../web/places-panel.mjs', 'text/javascript']],
   ['/places-map.mjs', ['../web/places-map.mjs', 'text/javascript']],
   ['/opening-hours.mjs', ['../src/opening-hours.mjs', 'text/javascript']],
+  ['/event-state.mjs', ['../src/event-state.mjs', 'text/javascript']],
   ['/opening-hours-lib.mjs', ['../node_modules/opening_hours/build/opening_hours.esm.mjs', 'text/javascript']],
   ['/suncalc.mjs', ['../node_modules/suncalc/index.js', 'text/javascript']],
   ['/saved-places.mjs', ['../src/saved-places.mjs', 'text/javascript']],

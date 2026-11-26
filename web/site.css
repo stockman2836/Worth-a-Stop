@@ -68,6 +68,14 @@ input { min-width: 0; flex: 1 1 15rem; padding: .9rem 1rem; border: 1px solid #8
 .opening-state { display: block; margin-top: .35rem; font-size: .9rem; color: #546770; }
 .opening-state[data-state="open"] { color: #176042; }
 .opening-state[data-state="closed"] { color: #a14025; }
+.time-slider { width: 100%; padding: .5rem 0; accent-color: #16485c; }
+.availability-filter { display: flex; align-items: center; gap: .5rem; margin-top: .75rem; font-weight: 400; }
+.availability-filter input { flex: none; padding: 0; accent-color: #16485c; }
+.filter-message:empty { display: none; }
+.place-marker[data-state="closed"] span, .event-marker[data-state="ended"] span { background: #6c7c85; }
+.place-marker[data-state="unknown"] span, .event-marker[data-state="unknown"] span { background: #86743c; }
+.event-state { display: block; font-size: .9rem; color: #546770; margin-top: .25rem; }
+.event-state[data-state="ongoing"] { color: #176042; }
 .leaflet-popup-content { font: .95rem/1.5 "Inter", "Segoe UI", sans-serif; }
 .map-status:empty { display: none; }
 footer { flex-wrap: wrap; gap: .4rem; font-size: .875rem; color: #546770; }

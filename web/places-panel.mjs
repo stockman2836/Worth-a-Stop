@@ -1,6 +1,7 @@
 import { loadPlaces } from './saved-places.mjs';
 import { placesMap } from './places-map.mjs';
-import { openingState, localClock } from './opening-hours.mjs';
+import { openingState, localClock, localInstant } from './opening-hours.mjs';
+import { eventState } from './event-state.mjs';
 import { todayIn } from './day-agenda.mjs';
 
 const copy = {
@@ -11,7 +12,10 @@ const copy = {
     zoomIn: 'Приблизить', zoomOut: 'Отдалить', unknown: 'Часы работы не указаны',
     tilesError: 'Не удалось загрузить часть карты.', saved: 'Источник недоступен. Показана сохранённая подборка от',
     source: 'Открыть в OpenStreetMap', legend: 'Круги — места · ромбы — события выбранного дня',
-    date: 'Дата проверки', time: 'Местное время', open: 'Открыто', closed: 'Закрыто', uncertain: 'Время работы неизвестно' },
+    date: 'Дата проверки', time: 'Местное время', open: 'Открыто', closed: 'Закрыто', uncertain: 'Время работы неизвестно',
+    timeline: 'Время на карте', available: 'Доступно сейчас', ongoing: 'Идёт', soon: 'Начнётся в течение часа',
+    upcoming: 'Позже', ended: 'Завершилось', eventUnknown: 'Время события неизвестно',
+    filtered: (places, events) => `Доступно мест — ${places}, событий — ${events}. Неизвестное расписание скрыто.` },
   en: { title: 'Nearby places', loading: 'Looking for places…', empty: 'No matching places within 2 km.',
     scope: 'Within 2 km of the centre, straight-line distance', error: 'Could not load places.', retry: 'Try again',
     hours: 'Opening hours', museum: 'Museum', gallery: 'Gallery', viewpoint: 'Viewpoint',
@@ -19,7 +23,10 @@ const copy = {
     zoomIn: 'Zoom in', zoomOut: 'Zoom out', unknown: 'Opening hours unspecified',
     tilesError: 'Some map tiles could not be loaded.', saved: 'Source unavailable. Showing places saved on',
     source: 'Open in OpenStreetMap', legend: 'Circles — places · diamonds — events for the selected day',
-    date: 'Check date', time: 'Local time', open: 'Open', closed: 'Closed', uncertain: 'Opening hours unknown' },
+    date: 'Check date', time: 'Local time', open: 'Open', closed: 'Closed', uncertain: 'Opening hours unknown',
+    timeline: 'Map time', available: 'Available now', ongoing: 'Ongoing', soon: 'Starts within an hour',
+    upcoming: 'Later', ended: 'Ended', eventUnknown: 'Event time unknown',
+    filtered: (places, events) => `Available places — ${places}, events — ${events}. Unknown schedules are hidden.` },
 };
 
 export function placesPanel(city, language, signal, open, selection) {
@@ -42,6 +49,7 @@ export function placesPanel(city, language, signal, open, selection) {
   let events = [];
   let selectedEvent;
   let onDayChange;
+  let onTimeChange;
   let loadedPlaces = [];
   const zone = city.timezone || 'UTC';
   const controls = document.createElement('div');
@@ -61,10 +69,39 @@ export function placesPanel(city, language, signal, open, selection) {
   }
   const day = field('date', text.date, selection?.date ?? todayIn(zone));
   const clock = field('time', text.time, selection?.time ?? localClock(zone));
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.className = 'time-slider';
+  slider.min = '0';
+  slider.max = '1439';
+  slider.step = '1';
+  slider.setAttribute('aria-label', text.timeline);
+  const filterLabel = document.createElement('label');
+  filterLabel.className = 'availability-filter';
+  const filter = document.createElement('input');
+  filter.type = 'checkbox';
+  filter.checked = selection?.available ?? false;
+  filterLabel.append(filter, text.available);
+  const filterMessage = document.createElement('p');
+  filterMessage.className = 'filter-message';
+  filterMessage.setAttribute('role', 'status');
   const zoneLabel = document.createElement('span');
   zoneLabel.textContent = zone;
   controls.append(zoneLabel);
+  let selectedInstant;
+  function eventInfo(event) {
+    const state = eventState(event, selectedInstant);
+    return { state, label: state === 'unknown' ? text.eventUnknown : text[state],
+      available: state === 'ongoing' && event.status !== 5 };
+  }
   function updateHours() {
+    selectedInstant = city.timezone ? localInstant(day.value, clock.value, zone) : undefined;
+    slider.disabled = !clock.value;
+    if (clock.value) {
+      const [hour, minute] = clock.value.split(':').map(Number);
+      slider.value = hour * 60 + minute;
+      slider.setAttribute('aria-valuetext', clock.value + ' · ' + zone);
+    }
     const states = loadedPlaces.map(place => {
       const state = city.timezone ? openingState(place.hours, day.value, clock.value, zone) : 'unknown';
       return { state, label: state === 'unknown' ? text.uncertain : text[state] };
@@ -73,16 +110,29 @@ export function placesPanel(city, language, signal, open, selection) {
       const badge = item.querySelector('.opening-state');
       badge.textContent = states[i].label;
       badge.dataset.state = states[i].state;
+      item.hidden = filter.checked && states[i].state !== 'open';
     }
-    map?.setStates(states);
+    map?.setStates(states, filter.checked);
+    map?.setEventStates(new Map(events.map(event => [event, eventInfo(event)])), filter.checked);
+    filterMessage.textContent = filter.checked
+      ? text.filtered(states.filter(info => info.state === 'open').length, events.filter(event => eventInfo(event).available).length) : '';
+    onTimeChange?.();
   }
   day.addEventListener('change', () => { updateHours(); onDayChange?.(day.value); });
+  clock.addEventListener('input', updateHours);
   clock.addEventListener('change', updateHours);
+  slider.addEventListener('input', () => {
+    const value = Number(slider.value);
+    clock.value = String(Math.floor(value / 60)).padStart(2, '0') + ':' + String(value % 60).padStart(2, '0');
+    updateHours();
+  });
+  filter.addEventListener('change', updateHours);
   function ensureMap() {
     if (map || !details.open || signal.aborted) return;
     mapBox.hidden = false;
     map = placesMap(mapBox, city, [], { ...text, name: place => place.names[language] || place.name }, () => {});
     map.setEvents(events);
+    updateHours();
   }
   let storage;
   try { storage = window.localStorage; } catch { /* Optional saved results. */ }
@@ -96,7 +146,7 @@ export function placesPanel(city, language, signal, open, selection) {
   retry.hidden = true;
   const legend = document.createElement('p');
   legend.textContent = text.legend;
-  details.append(summary, controls, status, retry, mapBox, legend, list, credit);
+  details.append(summary, controls, slider, filterLabel, filterMessage, status, retry, mapBox, legend, list, credit);
   const km = new Intl.NumberFormat(language, { style: 'unit', unit: 'kilometer', maximumFractionDigits: 1 });
   const metres = new Intl.NumberFormat(language, { style: 'unit', unit: 'meter', maximumFractionDigits: 0 });
   async function load() {
@@ -117,7 +167,6 @@ export function placesPanel(city, language, signal, open, selection) {
       }
       map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name }, select);
       map.setEvents(events);
-      if (selectedEvent && events.includes(selectedEvent)) map.selectEvent(selectedEvent);
       for (const [index, place] of places.entries()) {
         const item = document.createElement('li');
         const show = document.createElement('button');
@@ -140,6 +189,7 @@ export function placesPanel(city, language, signal, open, selection) {
       }
       loadedPlaces = places;
       updateHours();
+      if (selectedEvent && events.includes(selectedEvent)) map.selectEvent(selectedEvent);
       const date = new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(checkedAt);
       status.textContent = [places.length ? text.scope : text.empty, stale && text.saved + ' ' + date].filter(Boolean).join(' · ');
       retry.hidden = !stale;
@@ -154,14 +204,19 @@ export function placesPanel(city, language, signal, open, selection) {
   });
   retry.addEventListener('click', load);
   details.open = open;
+  updateHours();
   return {
     element: details,
     setDay(value) { day.value = value; updateHours(); },
     getDay() { return day.value; },
     onDayChange(listener) { onDayChange = listener; },
-    setEvents(value) { events = value; selectedEvent = undefined; map?.setEvents(events); },
+    onTimeChange(listener) { onTimeChange = listener; },
+    eventInfo,
+    eventVisible(event) { return !filter.checked || eventInfo(event).available; },
+    setEvents(value) { events = value; selectedEvent = undefined; map?.setEvents(events); updateHours(); },
     selectEvent(event) {
       selectedEvent = event;
+      if (filter.checked && !eventInfo(event).available) { filter.checked = false; updateHours(); }
       details.open = true;
       ensureMap();
       map?.selectEvent(event);

@@ -76,7 +76,7 @@ function renderLanguage() {
   }
 }
 
-function cityRow(city, openId, initialDate, signal, placesId) {
+function cityRow(city, openId, initialDate, signal, placesId, selection) {
   const row = document.createElement('li');
   const name = document.createElement('button');
   name.type = 'button';
@@ -88,7 +88,7 @@ function cityRow(city, openId, initialDate, signal, placesId) {
   zone.textContent = city.timezone;
   zone.className = 'zone';
   const open = String(city.id) === openId;
-  const places = placesPanel(city, language, signal, String(city.id) === placesId);
+  const places = placesPanel(city, language, signal, String(city.id) === placesId, selection);
   const panel = calendarsPanel(city, open, language, copy[language], storage, open ? initialDate : undefined, signal, places);
   name.addEventListener('click', () => {
     input.value = city.name;
@@ -109,7 +109,7 @@ function cancelSearch() {
   requestId++;
 }
 
-async function showSearch(query, openId, openSingle = false, initialDate, placesId) {
+async function showSearch(query, openId, openSingle = false, initialDate, placesId, selection) {
   cancelSearch();
   const currentRequest = requestId;
   searchController = new AbortController();
@@ -126,7 +126,7 @@ async function showSearch(query, openId, openSingle = false, initialDate, places
     const { cities, correction } = await suggestCities(query, lookup, language, selectedCountry);
     if (currentRequest !== requestId) return;
     if (!openId && openSingle && cities.length === 1) openId = String(cities[0].id);
-    results.replaceChildren(...cities.map(city => cityRow(city, openId, initialDate, signal, placesId)));
+    results.replaceChildren(...cities.map(city => cityRow(city, openId, initialDate, signal, placesId, selection)));
     status.textContent = correction ? text.corrected(correction) : cities.length ? text.found(cities.length) : text.empty;
   } catch {
     if (currentRequest === requestId) status.textContent = text.error;
@@ -172,7 +172,10 @@ for (const button of buttons) {
     if (submittedQuery !== null) {
       const panel = results.querySelector('details[data-city-id][open]');
       const placesId = results.querySelector('details[data-places-id][open]')?.dataset.placesId;
-      showSearch(submittedQuery, panel?.dataset.cityId, false, panel?.querySelector('input[type=date]')?.value, placesId);
+      const selectedPlaces = results.querySelector('details[data-places-id][open]');
+      const selection = selectedPlaces && { date: selectedPlaces.querySelector('input[type=date]').value,
+        time: selectedPlaces.querySelector('input[type=time]').value };
+      showSearch(submittedQuery, panel?.dataset.cityId, false, panel?.querySelector('input[type=date]')?.value, placesId, selection);
     }
   });
 }

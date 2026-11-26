@@ -22,7 +22,9 @@ export function placesMap(container, city, places, labels, onSelect) {
     title.textContent = labels.name(place);
     const hours = document.createElement('p');
     hours.textContent = place.hours ? labels.hours + ' · ' + place.hours : labels.unknown;
-    popup.append(title, hours);
+    const state = document.createElement('p');
+    state.className = 'opening-state';
+    popup.append(title, state, hours);
     const icon = L.divIcon({ className: 'place-marker', html: '<span></span>', iconSize: [24, 24], iconAnchor: [12, 12] });
     const marker = L.marker([place.latitude, place.longitude], { icon, title: labels.name(place), alt: labels.name(place) })
       .addTo(map).bindPopup(popup);
@@ -35,6 +37,14 @@ export function placesMap(container, city, places, labels, onSelect) {
   const eventLayer = L.layerGroup().addTo(map);
   const eventMarkers = new Map();
   return {
+    setStates(states) {
+      for (const [i, marker] of markers.entries()) {
+        const badge = marker.getPopup().getContent().querySelector('.opening-state');
+        badge.textContent = states[i].label;
+        badge.dataset.state = states[i].state;
+        marker.getElement().dataset.state = states[i].state;
+      }
+    },
     select(index) { map.setView(markers[index].getLatLng(), Math.max(16, map.getZoom())); markers[index].openPopup(); },
     setEvents(events) {
       eventLayer.clearLayers();

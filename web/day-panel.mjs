@@ -51,7 +51,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
   view.querySelector('label span').textContent = text.date;
   more.textContent = text.more;
   retry.textContent = text.retry;
-  input.value = initialDate || todayIn(zone);
+  input.value = initialDate || eventMap.getDay() || todayIn(zone);
 
   function showMore(count = 20) {
     const offset = list.childElementCount;
@@ -92,6 +92,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
     controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, searchSignal]);
     const day = input.value;
+    eventMap.setDay(day);
     const localToday = todayIn(zone);
     today.setAttribute('aria-pressed', String(day === localToday));
     tomorrow.setAttribute('aria-pressed', String(day === nextDate(localToday)));
@@ -131,6 +132,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
   input.addEventListener('change', load);
   more.addEventListener('click', () => showMore());
   retry.addEventListener('click', load);
+  eventMap.onDayChange(value => { input.value = value; load(); });
   load();
   return view;
 }

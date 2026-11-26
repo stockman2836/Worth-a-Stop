@@ -4,7 +4,7 @@ Worth a Stop is a travel planner for people exploring a city on their own. Choos
 
 ## Getting started
 
-You can search for cities by name in the browser or from the command line. Both use the Open-Meteo geocoding API. The command line can also import an organizer’s published event calendar. Run the commands below from the repository root with Node.js 22 or later. Install the calendar parser before importing events or running the tests.
+You can search for cities by name in the browser or from the command line. Both use the Open-Meteo geocoding API. The command line can also import an organizer’s published event calendar. Run the commands below from the repository root with Node.js 22 or later. Install the dependencies before starting the website, importing events or running the tests.
 
 ```sh
 npm ci
@@ -25,6 +25,8 @@ If a search returns no cities, the website checks for nearby spellings in city n
 Under **Events by day**, choose Today, Tomorrow or a trip date. The site reads the individual sessions published in OpenAgenda. A multi-day event appears on each day it overlaps, and a recurring performance appears on its scheduled dates. Times use the destination’s time zone, shown alongside the results. When the city has no known time zone, the agenda uses UTC. Switching languages keeps the selected date.
 
 The daily search starts within 5 km of the city centre and expands to 25 km if it finds no sessions. Cancelled and indefinitely postponed listings are omitted. Sold-out events are labelled. When two publishers list the same title at the same venue and start time, the latest publication takes precedence. A source failure offers a retry, and an incomplete schedule is labelled. Event and venue names follow the publisher’s language. [OpenAgenda public dataset](https://public.opendatasoft.com/explore/dataset/evenements-publics-openagenda/)
+
+Open **Venue calendars and travel guide** to find the city's official calendar. The local server looks up the GeoNames ID in Wikidata and checks the municipal website and any explicitly identified official tourism portal in the English Wikipedia article. A link appears when the portal publishes recognizable event navigation. These links open the publisher's calendar. The daily listings currently come from OpenAgenda.
 
 **Venue calendars and travel guide** shows up to 25 OpenAgenda venue calendars. Its search covers current and upcoming programmes, independently of the day you selected. Open a programme or copy its venue-specific iCalendar link for the importer below.
 

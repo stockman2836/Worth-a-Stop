@@ -22,7 +22,9 @@ export function calendarsPanel(city, open, language, text, storage, initialDate,
   const refresh = document.createElement('button');
   refresh.type = 'button';
   refresh.textContent = text.refresh;
-  sources.append(sourcesTitle, message, list, guideBox, refresh);
+  const official = document.createElement('p');
+  official.setAttribute('role', 'status');
+  sources.append(sourcesTitle, official, message, list, guideBox, refresh);
   details.append(summary, sources);
 
   async function loadGuide() {
@@ -54,10 +56,28 @@ export function calendarsPanel(city, open, language, text, storage, initialDate,
     }
   }
 
+  async function loadOfficial(force) {
+    official.textContent = text.officialWait;
+    try {
+      const response = await fetch('/api/official-calendars/' + city.id, { signal, cache: force ? 'reload' : 'default' });
+      if (!response.ok) throw Error();
+      const links = await response.json();
+      official.textContent = links.length ? '' : text.officialEmpty;
+      for (const url of links) {
+        const link = document.createElement('a');
+        link.href = url;
+        link.textContent = text.official + ' · ' + new URL(url).hostname;
+        official.append(link, document.createElement('br'));
+      }
+    } catch {
+      official.textContent = text.officialError;
+    }
+  }
+
   async function load(force) {
     refresh.disabled = true;
     message.textContent = text.looking;
-    const guideRequest = loadGuide();
+    const guideRequest = Promise.all([loadGuide(), loadOfficial(force)]);
     try {
       const { sources, stale, checkedAt, radiusKm } = await findSources(city, { storage, refresh: force });
       list.replaceChildren(...sources.map(source => {

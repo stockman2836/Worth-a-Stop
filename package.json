@@ -5,6 +5,8 @@
     "node": ">=22"
   },
   "dependencies": {
-    "ical.js": "2.2.1"
+    "cheerio": "^1.0.0",
+    "ical.js": "2.2.1",
+    "ipaddr.js": "^2.2.0"
   }
 }

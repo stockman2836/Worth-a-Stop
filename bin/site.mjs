@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { officialCalendars } from '../src/official-calendars.mjs';
 
 const assets = new Map([
   ['/', ['../web/index.html', 'text/html']],
@@ -14,6 +15,16 @@ const assets = new Map([
 ]);
 
 const server = createServer(async (request, response) => {
+  const lookup = /^\/api\/official-calendars\/([1-9]\d{0,9})$/.exec(request.url);
+  if (lookup && request.method === 'GET') {
+    try {
+      const links = await officialCalendars(lookup[1]);
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=3600' }).end(JSON.stringify(links));
+    } catch {
+      response.writeHead(502).end();
+    }
+    return;
+  }
   const asset = assets.get(request.url.split('?')[0]);
   if (!asset) {
     response.writeHead(404).end();

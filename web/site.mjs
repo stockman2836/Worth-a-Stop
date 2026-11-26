@@ -4,6 +4,8 @@ import { calendarsPanel } from './calendar-panel.mjs';
 
 const copy = {
   ru: {
+    official: 'Официальная афиша города', officialWait: 'Ищем официальную афишу…',
+    officialEmpty: 'Ссылку на официальную афишу найти не удалось.', officialError: 'Не удалось проверить городские источники.',
     heading: 'В какой город поедешь?', label: 'Название города', placeholder: 'Например, Будапешт',
     search: 'Найти', language: 'Язык', attribution: 'Геоданные', loading: 'Ищем города…',
     short: 'Введите хотя бы два символа.', empty: 'Совпадений нет. Попробуйте другое написание.',
@@ -18,6 +20,8 @@ const copy = {
     saved: 'Каталог недоступен. Показан сохранённый результат.', checked: 'Проверено',
   },
   en: {
+    official: 'Official city events', officialWait: 'Looking for the official city calendar…',
+    officialEmpty: 'No official calendar link found.', officialError: 'Could not check the city sources.',
     heading: 'Which city are you visiting?', label: 'City name', placeholder: 'For example, Budapest',
     search: 'Search', language: 'Language', attribution: 'Location data', loading: 'Searching for cities…',
     short: 'Enter at least two characters.', empty: 'No matches. Try another spelling.',

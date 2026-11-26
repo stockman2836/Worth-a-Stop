@@ -13,7 +13,7 @@ const copy = {
     estimate: 'Estimated time' },
 };
 
-export function walkingPanel(language, timeline, signal) {
+export function walkingPanel(language, timeline, signal, onRoutes = () => {}) {
   const text = copy[language];
   const element = document.createElement('section');
   element.className = 'walking-plan';
@@ -65,6 +65,7 @@ export function walkingPanel(language, timeline, signal) {
     retry.hidden = loading || !legs.some(leg => leg.status === 'unavailable');
     show.hidden = !stops.some(stop => stop.location);
     timeline.setRoute(legs, stops);
+    onRoutes(legs, stops);
   }
   async function calculate() {
     controller?.abort();

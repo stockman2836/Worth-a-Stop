@@ -16,6 +16,7 @@ const assets = new Map([
   ['/itinerary.mjs', ['../src/itinerary.mjs', 'text/javascript']],
   ['/walking-legs.mjs', ['../src/walking-legs.mjs', 'text/javascript']],
   ['/walking-panel.mjs', ['../web/walking-panel.mjs', 'text/javascript']],
+  ['/arrival-times.mjs', ['../src/arrival-times.mjs', 'text/javascript']],
   ['/places-map.mjs', ['../web/places-map.mjs', 'text/javascript']],
   ['/opening-hours.mjs', ['../src/opening-hours.mjs', 'text/javascript']],
   ['/event-state.mjs', ['../src/event-state.mjs', 'text/javascript']],

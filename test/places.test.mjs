@@ -61,3 +61,18 @@ test('uses the other endpoint after an outage and respects a cancelled city sear
   } }));
   assert.equal(attempts, 1);
 });
+
+test('uses the POST backup with the same query when both GET providers are unavailable', async () => {
+  const calls = [];
+  const places = await nearbyPlaces(city, { fetchResponse: async (url, options) => {
+    calls.push({ url, options });
+    if (calls.length < 3) return new Response(null, { status: 503 });
+    assert.equal(url.hostname, 'overpass.private.coffee');
+    assert.equal(options.method, 'POST');
+    assert.equal(options.headers['Content-Type'], 'application/x-www-form-urlencoded');
+    assert.equal(new URLSearchParams(options.body).get('data'), calls[0].url.searchParams.get('data'));
+    return Response.json({ elements: [node] });
+  } });
+  assert.equal(places.length, 1);
+  assert.equal(calls.length, 3);
+});

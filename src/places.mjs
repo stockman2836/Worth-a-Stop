@@ -31,22 +31,24 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch } = {})
     : `around:${radius * 1000},${latitude},${longitude}`;
   const filters = Object.entries(categories).map(([tag, values]) =>
     `nwr[${tag}~"^(${values.join('|')})$"][name](${bounds});`);
-  async function query(endpoint) {
+  async function query(endpoint, post = false) {
     const url = new URL(endpoint);
-    url.searchParams.set('data', `[out:json][timeout:12];(${filters.join('')});out tags center;`);
+    const data = `[out:json][timeout:12];(${filters.join('')});out tags center;`;
+    if (!post) url.searchParams.set('data', data);
     const timeout = AbortSignal.timeout(18000);
-    const response = await fetchResponse(url, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+    const response = await fetchResponse(url, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      headers: { 'User-Agent': 'Worth-a-Stop/0.1 (city travel planner)', ...(post && { 'Content-Type': 'application/x-www-form-urlencoded' }) },
+      ...(post && { method: 'POST', body: new URLSearchParams({ data }).toString() }) });
     if (!response.ok) throw Error('Place search unavailable');
     const { elements, remark } = await response.json();
     if (remark || !Array.isArray(elements)) throw Error('Incomplete place search');
     return elements;
   }
   let elements;
-  try {
-    elements = await query('https://maps.mail.ru/osm/tools/overpass/api/interpreter');
-  } catch {
-    signal?.throwIfAborted();
-    elements = await query('https://overpass-api.de/api/interpreter');
+  const endpoints = ['https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+  for (const [index, endpoint] of endpoints.entries()) {
+    try { elements = await query(endpoint, index === 2); break; }
+    catch (error) { signal?.throwIfAborted(); if (index === endpoints.length - 1) throw error; }
   }
   const places = [];
   for (const { type, id, lat, lon, center, tags = {} } of elements) {

@@ -20,6 +20,9 @@ const assets = new Map([
   ['/walking-panel.mjs', ['../web/walking-panel.mjs', 'text/javascript']],
   ['/arrival-times.mjs', ['../src/arrival-times.mjs', 'text/javascript']],
   ['/trip-window.mjs', ['../src/trip-window.mjs', 'text/javascript']],
+  ['/auto-plan.mjs', ['../src/auto-plan.mjs', 'text/javascript']],
+  ['/plan-candidates.mjs', ['../src/plan-candidates.mjs', 'text/javascript']],
+  ['/auto-plan-panel.mjs', ['../web/auto-plan-panel.mjs', 'text/javascript']],
   ['/city-workspace.mjs', ['../web/city-workspace.mjs', 'text/javascript']],
   ['/starting-point.mjs', ['../src/starting-point.mjs', 'text/javascript']],
   ['/alternatives.mjs', ['../src/alternatives.mjs', 'text/javascript']],
@@ -73,8 +76,7 @@ const server = createServer(async (request, response) => {
     let entry = placesCache.get(key);
     if (!entry || entry.expires < Date.now()) {
       if (placesCache.size >= 100) placesCache.delete(placesCache.keys().next().value);
-      const fetchResponse = (url, options) => fetch(url, { ...options, headers: { 'User-Agent': 'Worth-a-Stop/0.1 (city travel planner)' } });
-      entry = { promise: nearbyPlaces({ latitude, longitude }, { fetchResponse }), expires: Date.now() + 3600000 };
+      entry = { promise: nearbyPlaces({ latitude, longitude }), expires: Date.now() + 3600000 };
       placesCache.set(key, entry);
     }
     try {

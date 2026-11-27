@@ -75,6 +75,27 @@ export function placesMap(container, city, places, labels, onSelect) {
       L.marker([point.latitude, point.longitude], { icon, title, alt: title }).bindPopup(content).addTo(originLayer);
     },
     clearPreview() { previewLayer.clearLayers(); },
+    previewPlan(legs, stops) {
+      previewLayer.clearLayers();
+      const points = [];
+      for (const leg of legs) {
+        const line = leg.geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+        points.push(...line);
+        L.polyline(line, { className: 'draft-route', color: '#c47a43', weight: 5, dashArray: '7 9' }).addTo(previewLayer);
+      }
+      let number = 0;
+      for (const stop of stops) {
+        if (!stop.location) continue;
+        points.push([stop.location.latitude, stop.location.longitude]);
+        const content = document.createElement('a');
+        content.href = stop.url;
+        content.textContent = stop.title;
+        const label = stop.type === 'origin' ? 'S' : String(++number);
+        const icon = L.divIcon({ className: 'route-stop draft-stop', html: label, iconSize: [28, 28], iconAnchor: [14, 14] });
+        L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title }).bindPopup(content).addTo(previewLayer);
+      }
+      if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
+    },
     previewPlace(stop) {
       previewLayer.clearLayers();
       const content = document.createElement('div');

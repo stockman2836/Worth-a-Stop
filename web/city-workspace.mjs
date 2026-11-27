@@ -1,6 +1,7 @@
 import { placesPanel } from './places-panel.mjs';
 import { calendarsPanel } from './calendar-panel.mjs';
 import { itineraryPanel } from './itinerary-panel.mjs';
+import { autoPlanPanel } from './auto-plan-panel.mjs';
 
 const copy = {
   ru: { eyebrow: 'ТВОЙ ДЕНЬ В ГОРОДЕ', change: 'Сменить город', trip: 'Когда гуляем?',
@@ -61,6 +62,8 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   zoneValue.textContent = city.timezone || 'UTC';
   zone.append(zoneTitle, zoneValue);
   trip.append(itinerary.controls.date, itinerary.controls.start, itinerary.controls.end, zone);
+  const autoPlan = autoPlanPanel(city, language, itinerary, places, storage, signal, selection?.pace);
+  trip.append(autoPlan.controls);
 
   const grid = document.createElement('div');
   grid.className = 'workspace-grid';
@@ -132,7 +135,9 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   discovery.append(discoveryTitle, hint, tabs, ...panels);
   selectTab(selection?.tab === 'events' ? 1 : 0);
   explore.append(map, discovery);
-  grid.append(explore, itinerary.element);
+  const plan = document.createElement('div'); plan.className = 'plan-column';
+  plan.append(autoPlan.element, itinerary.element);
+  grid.append(explore, plan);
   const footnote = document.createElement('p');
   footnote.className = 'workspace-note';
   footnote.textContent = text.hint;
@@ -144,6 +149,6 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   if (!selection?.time) syncPreview();
   return {
     element,
-    selection() { return { ...places.selection(), tab: panels[1].hidden ? 'places' : 'events' }; },
+    selection() { return { ...places.selection(), tab: panels[1].hidden ? 'places' : 'events', pace: autoPlan.getPace() }; },
   };
 }

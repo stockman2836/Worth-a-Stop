@@ -55,6 +55,19 @@ export function itineraryStore(cityId, storage) {
   }
   return {
     read,
+    replaceAll(day, proposed, expected) {
+      if (!Array.isArray(proposed) || !proposed.length) throw Error('Invalid proposed plan');
+      const stops = proposed.map(stop => {
+        const valid = itineraryStop(stop, stop.type);
+        if (stop.id !== valid.id || stop.duration !== null && (!Number.isInteger(stop.duration) || stop.duration < 1 || stop.duration > 1440)) throw Error('Invalid proposed stop');
+        return { ...valid, duration: stop.duration };
+      });
+      if (new Set(stops.map(stop => stop.id)).size !== stops.length) throw Error('Duplicate proposed stops');
+      return change(day, current => {
+        if (JSON.stringify(current) !== JSON.stringify(expected)) throw Error('Plan changed');
+        return stops;
+      });
+    },
     add(day, stop) {
       return change(day, stops => stops.some(s => s.id === stop.id)
         ? stops.map(existing => existing.id === stop.id ? { ...existing,

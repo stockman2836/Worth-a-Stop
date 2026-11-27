@@ -78,6 +78,8 @@ const copy = {
 };
 
 export function itineraryPanel(city, language, timeline, storage, signal, onExplore) {
+  const listeners = new Set();
+  function changed() { for (const listener of listeners) listener(); }
   const text = copy[language];
   const store = itineraryStore(city.id, storage);
   const points = startingPointStore(city.id, storage);
@@ -251,6 +253,7 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
       unsavedTimes.delete(key);
     } catch { unsavedTimes.set(key, input.value); }
     updateArrivals();
+    changed();
   }
   startInput.addEventListener('change', () => saveTime('start', startInput));
   endInput.addEventListener('change', () => saveTime('end', endInput));
@@ -340,6 +343,7 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
     walks.hidden = withStartingPoint(result.stops, origin, text.origin).length < 2;
     walking.update(withStartingPoint(result.stops, origin, text.origin));
     updateArrivals();
+    changed();
   }
   function setDay(day) {
     try { nextDate(day); } catch { return; }
@@ -356,11 +360,22 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
   });
   timeline.onDayChange(setDay);
   window.addEventListener('storage', () => { startInput.value = readStart(); endInput.value = readTime('end'); render(); }, { signal });
+  function context() {
+    return structuredClone({ day: activeDay, startTime: startInput.value, endTime: endInput.value,
+      origin: points.read(activeDay).point, stops: store.read(activeDay).stops });
+  }
   render();
   return {
     element,
     controls: { date: label, start: startLabel, end: endLabel },
     mapButton: walking.mapButton,
+    context,
+    onChange(listener) { listeners.add(listener); },
+    applyPlan(stops, expected) {
+      if (JSON.stringify(context()) !== JSON.stringify(expected) || readTime('start') !== startInput.value ||
+          readTime('end') !== endInput.value) throw Error('Plan changed');
+      render(store.replaceAll(activeDay, stops, expected.stops));
+    },
     button(item, type) {
       const add = button(text.add, () => {
         try { nextDate(timeline.getDay()); } catch { status.textContent = text.invalidDate; return; }

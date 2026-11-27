@@ -55,6 +55,7 @@ export function placesPanel(city, language, signal, open, selection) {
   let events = [];
   let selectedEvent;
   let alternative;
+  let draft;
   let route = { legs: [], stops: [] };
   let origin = null;
   let startSelection;
@@ -168,6 +169,7 @@ export function placesPanel(city, language, signal, open, selection) {
     map.setRoute(route.legs, route.stops, route.focused);
     configureOrigin();
     updateHours();
+    if (draft) map.previewPlan(draft.legs, draft.stops);
   }
   let storage;
   try { storage = window.localStorage; } catch { /* Optional saved results. */ }
@@ -241,6 +243,7 @@ export function placesPanel(city, language, signal, open, selection) {
       updateHours();
       if (selectedEvent && events.includes(selectedEvent)) map.selectEvent(selectedEvent);
       if (alternative) map.previewPlace(alternative);
+      if (draft) map.previewPlan(draft.legs, draft.stops);
       const date = new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(checkedAt);
       status.textContent = [places.length ? text.scope : text.empty, stale && text.saved + ' ' + date].filter(Boolean).join(' · ');
       retry.hidden = !stale;
@@ -266,6 +269,14 @@ export function placesPanel(city, language, signal, open, selection) {
     getDay() { return day.value; },
     onDayChange(listener) { dayListeners.add(listener); },
     setItinerary(value) { itinerary = value; },
+    clearDraft() { draft = undefined; map?.clearPreview(); },
+    showDraft(legs, stops) {
+      draft = { legs, stops };
+      details.open = true;
+      ensureMap();
+      map?.previewPlan(legs, stops);
+      mapBox.scrollIntoView({ block: 'center', behavior: 'auto' });
+    },
     setOrigin(point) { origin = point; map?.setOrigin(point, text.origin); },
     cancelStartSelection,
     pickStart(pick, cancel) {

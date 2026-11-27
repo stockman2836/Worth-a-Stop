@@ -67,16 +67,17 @@ const server = createServer(async (request, response) => {
     const params = new URLSearchParams(request.url.slice('/api/places?'.length));
     const latitude = Number(params.get('lat'));
     const longitude = Number(params.get('lon'));
+    const radiusKm = Number(params.get('radius') ?? 2);
     if (!params.get('lat')?.trim() || !params.get('lon')?.trim() || !Number.isFinite(latitude) || Math.abs(latitude) > 90 ||
-        !Number.isFinite(longitude) || Math.abs(longitude) > 180) {
+        !Number.isFinite(longitude) || Math.abs(longitude) > 180 || ![2, 6].includes(radiusKm)) {
       response.writeHead(400).end();
       return;
     }
-    const key = [latitude, longitude].join('/');
+    const key = [radiusKm, latitude, longitude].join('/');
     let entry = placesCache.get(key);
     if (!entry || entry.expires < Date.now()) {
       if (placesCache.size >= 100) placesCache.delete(placesCache.keys().next().value);
-      entry = { promise: nearbyPlaces({ latitude, longitude }), expires: Date.now() + 3600000 };
+      entry = { promise: nearbyPlaces({ latitude, longitude }, { radiusKm }), expires: Date.now() + 3600000 };
       placesCache.set(key, entry);
     }
     try {

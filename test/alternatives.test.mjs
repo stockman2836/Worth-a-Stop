@@ -18,10 +18,10 @@ const legs = [{ from: first, to: target, status: 'ok', duration: 600 }, { from: 
 
 test('checks actual walking-adjusted visit times and preserves the next fixed event', async () => {
   const result = await findAlternatives(stops, target.id, legs, start, 'Europe/Prague', { fetchResponse: async url => {
-    if (String(url).startsWith('/api/places?')) return Response.json([
+    if (String(url).startsWith('/api/places?')) { assert.equal(new URL(url, 'https://app.example').searchParams.get('radius'), '2'); return Response.json([
       makePlace('3', 15), makePlace('4', 16), makePlace('5', 17, '11:00-12:15'),
       makePlace('6', 18, null), makePlace('2', 14.01),
-    ]);
+    ]); }
     const p = new URL(url, 'https://local.example').searchParams;
     const incoming = Number(p.get('toLon'));
     const duration = incoming === 16 ? 6000 : incoming === 17 ? 1800 : 1200;

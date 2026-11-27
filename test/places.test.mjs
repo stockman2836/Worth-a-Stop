@@ -18,12 +18,12 @@ test('uses localized names, published hours and object links with great-circle d
   assert.ok(Math.abs(place.km - 1) < .002);
 });
 
-test('keeps a more distant category in the shortlist and handles area centres', async () => {
+test('prioritizes a documented place across categories and handles area centres', async () => {
   const museums = Array.from({ length: 14 }, (_, i) => ({ ...node, id: i + 10, tags: { ...node.tags, name: 'Museum ' + i } }));
-  const places = await query([...museums, { type: 'way', id: 7, center: { lat: 0, lon: .015 }, tags: { leisure: 'park', name: 'City Park' } }]);
+  const places = await query([...museums, { type: 'way', id: 7, center: { lat: 0, lon: .015 }, tags: { leisure: 'park', name: 'City Park', wikidata: 'Q7', wikipedia: 'en:City Park', 'name:en': 'City Park' } }]);
   assert.equal(places.length, 12);
-  assert.equal(places.at(-1).category, 'park');
-  assert.equal(places.at(-1).hours, undefined);
+  assert.ok(places.some(place => place.category === 'park'));
+  assert.equal(places.find(place => place.category === 'park').hours, undefined);
 });
 
 test('rejects an uncorroborated marketplace tag, prioritizes the cathedral and merges duplicate landmark points', async () => {
@@ -75,4 +75,49 @@ test('uses the POST backup with the same query when both GET providers are unava
   } });
   assert.equal(places.length, 1);
   assert.equal(calls.length, 3);
+});
+
+test('city discovery includes documented landmarks beyond the local radius without category quotas', async () => {
+  const landmarks = [
+    { type: 'relation', id: 1834818, center: { lat: 41.89021, lon: 12.49223 }, tags: {
+      name: 'Colosseo', tourism: 'attraction', historic: 'archaeological_site', building: 'amphitheatre', wikidata: 'Q10285', wikipedia: 'it:Colosseo',
+      heritage: '1', 'ref:whc': '91', importance: 'international', landmark: '1', 'name:en': 'Colosseum', 'name:ru': 'Колизей', 'name:fr': 'Colisée',
+    } },
+    { type: 'relation', id: 3374342, center: { lat: 41.898616, lon: 12.4768334 }, tags: {
+      name: 'Pantheon', tourism: 'attraction', building: 'temple', heritage: '1', wikidata: 'Q99309', wikipedia: 'it:Pantheon (Roma)',
+      'name:ru': 'Пантеон', 'name:fr': 'Panthéon', 'name:en': 'Pantheon', 'ref:whc': '91',
+    } },
+    { type: 'way', id: 244159210, center: { lat: 41.9021569, lon: 12.4537105 }, tags: {
+      name: 'Basilica di San Pietro', tourism: 'attraction', building: 'basilica', historic: 'church', heritage: '1', wikidata: 'Q12512', wikipedia: 'it:Basilica di San Pietro in Vaticano',
+      'name:ru': 'Собор Святого Петра', 'name:en': "Saint Peter's Basilica", 'name:de': 'Petersdom', 'ref:whc': '286', importance: 'international',
+    } },
+  ];
+  const ordinary = Array.from({ length: 30 }, (_,index) => ({ type: 'node', id: index + 100, lat: 41.892, lon: 12.512 + index / 100000,
+    tags: { name: 'Local cathedral ' + index, building: 'cathedral' } }));
+  const other = { type: 'node', id: 999, lat: 41.9, lon: 12.53, tags: { name: 'Local market', amenity: 'marketplace', market: 'yes' } };
+  const centre = { latitude: 41.89193, longitude: 12.51133 };
+  let requested;
+  const fetchResponse = async url => { requested = url.searchParams.get('data'); return Response.json({ elements: [...ordinary, other, ...landmarks] }); };
+  const places = await nearbyPlaces(centre, { radiusKm: 6, fetchResponse });
+  assert.equal(places.length, 24);
+  assert.deepEqual(new Set(places.slice(0, 3).map(place => place.name)), new Set(landmarks.map(place => place.tags.name)));
+  assert.ok(places.find(place => place.name === 'Pantheon').km > 2);
+  assert.ok(places.find(place => place.name === 'Basilica di San Pietro').km > 4);
+  assert.ok(requested.includes('[wikidata]'));
+  assert.ok(!requested.includes('Colosseo') && !requested.includes('Q10285'));
+  const local = await nearbyPlaces(centre, { radiusKm: 2, fetchResponse });
+  assert.equal(local.length, 12);
+  assert.equal(local.some(place => place.name === 'Pantheon'), false);
+});
+
+test('wide discovery rejects non-attractions, undocumented distant places and points outside the circle', async () => {
+  const samples = [
+    { ...node, id: 1, lat: .03, tags: { name: 'Distant park', leisure: 'park' } },
+    { ...node, id: 2, lat: .03, tags: { name: 'Metro station', railway: 'station', wikidata: 'Q1', wikipedia: 'en:Station' } },
+    { ...node, id: 3, lat: .05, lon: .05, tags: { name: 'Outside circle', tourism: 'attraction', wikidata: 'Q2' } },
+    { ...node, id: 4, lat: .03, tags: { name: 'Temple', building: 'temple', wikidata: 'Q3' } },
+  ];
+  const places = await nearbyPlaces(city, { radiusKm: 6, fetchResponse: async () => Response.json({ elements: samples }) });
+  assert.deepEqual(places.map(place => place.name), ['Temple']);
+  await assert.rejects(nearbyPlaces(city, { radiusKm: 500 }), /radius/);
 });

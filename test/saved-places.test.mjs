@@ -31,3 +31,26 @@ test('a cancelled city lookup never replaces the new city with a saved result', 
   controller.abort();
   await assert.rejects(loadPlaces(city, { signal: controller.signal, storage: saved, fetchResponse: unavailable }), { name: 'AbortError' });
 });
+
+test('city and local searches use separate versioned cache entries and the correct radius', async () => {
+  const saved = storage();
+  const calls = [];
+  const fetchResponse = async value => { calls.push(new URL(value, 'https://app.example')); return Response.json([place]); };
+  await loadPlaces(city, { storage: saved, fetchResponse });
+  assert.equal(calls[0].searchParams.get('radius'), '6');
+  assert.equal(calls[0].searchParams.get('v'), '4');
+  await assert.rejects(loadPlaces(city, { storage: saved, radiusKm: 2, fetchResponse: unavailable }));
+  await loadPlaces(city, { storage: saved, radiusKm: 2, fetchResponse });
+  assert.equal(calls[1].searchParams.get('radius'), '2');
+  assert.equal((await loadPlaces(city, { storage: saved, radiusKm: 2, fetchResponse: unavailable })).stale, true);
+  await assert.rejects(loadPlaces(city, { radiusKm: 99, fetchResponse }), /radius/);
+});
+
+test('accepts 24 city suggestions and leaves old shortlist caches unused', async () => {
+  const saved = storage();
+  saved.setItem(`worth-a-stop.places.v2.${city.latitude}.${city.longitude}`, JSON.stringify({ places: [place], checkedAt: Date.now() }));
+  await assert.rejects(loadPlaces(city, { storage: saved, fetchResponse: unavailable }));
+  const places = Array.from({ length: 24 }, (_,index) => ({ ...place, name: 'Place ' + index, url: 'https://www.openstreetmap.org/node/' + index }));
+  assert.equal((await loadPlaces(city, { storage: saved, fetchResponse: async () => Response.json(places) })).places.length, 24);
+  await assert.rejects(loadPlaces(city, { radiusKm: 2, fetchResponse: async () => Response.json(places) }), /Invalid places/);
+});

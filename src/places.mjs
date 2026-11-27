@@ -1,13 +1,17 @@
-const radius = 2; // kilometres from the geocoder's city centre
 const categories = {
   tourism: ['attraction', 'museum', 'viewpoint', 'gallery'],
-  historic: ['castle', 'monument', 'ruins', 'archaeological_site', 'city_gate'],
-  building: ['cathedral'], leisure: ['park', 'garden'], amenity: ['marketplace'],
+  historic: ['castle', 'monument', 'ruins', 'archaeological_site', 'city_gate', 'amphitheatre', 'fort', 'palace', 'church', 'temple', 'monastery'],
+  building: ['cathedral', 'basilica', 'church', 'temple', 'monastery'], leisure: ['park', 'garden'], amenity: ['marketplace'],
 };
 
 function importance(tags) {
-  const landmark = tags.building === 'cathedral' || tags.tourism === 'attraction' || categories.historic.includes(tags.historic);
-  return (tags.building === 'cathedral' ? 8 : landmark ? 5 : 0) + (tags.wikidata || tags.wikipedia ? 2 : 0);
+  const landmark = categories.building.includes(tags.building) || tags.tourism === 'attraction' || categories.historic.includes(tags.historic);
+  const translations = Object.keys(tags).filter(key => /^name:[a-z]{2,3}(?:-[a-z\d]+)*$/i.test(key) && tags[key]).length;
+  // Source annotations indicate prominence without a hand-maintained list of famous sites.
+  return (landmark ? 3 : tags.tourism === 'museum' ? 2 : 0) + Math.log2(1 + translations) * 6 +
+    (tags.wikidata ? 2 : 0) + (tags.wikipedia ? 3 : 0) + (tags.heritage ? 3 : 0) +
+    (tags['ref:whc'] || /unesco|whc/i.test(tags['heritage:operator'] || '') ? 2 : 0) +
+    (tags.importance === 'international' ? 4 : 0) + (['yes', '1'].includes(tags.landmark) ? 2 : 0);
 }
 
 function validPoint(lat, lon) {
@@ -21,16 +25,20 @@ function distance(lat, lon, otherLat, otherLon) {
   return 12742 * Math.asin(Math.sqrt(Math.min(1, a)));
 }
 
-export async function nearbyPlaces(city, { signal, fetchResponse = fetch } = {}) {
+export async function nearbyPlaces(city, { signal, fetchResponse = fetch, radiusKm = 2 } = {}) {
   const { latitude, longitude } = city;
   if (!validPoint(latitude, longitude)) throw Error('Invalid city centre');
-  const dy = radius / 110.5;
-  const dx = dy / Math.cos(latitude * Math.PI / 180);
-  const bounds = Math.abs(latitude) + dy < 90 && Math.abs(longitude) + dx < 180
-    ? [latitude - dy, longitude - dx, latitude + dy, longitude + dx].map(n => n.toFixed(5)).join(',')
-    : `around:${radius * 1000},${latitude},${longitude}`;
+  if (![2, 6].includes(radiusKm)) throw Error('Invalid place search radius');
+  function bounds(radius) {
+    const dy = radius / 110.5;
+    const dx = dy / Math.cos(latitude * Math.PI / 180);
+    return Math.abs(latitude) + dy < 90 && Math.abs(longitude) + dx < 180
+      ? [latitude - dy, longitude - dx, latitude + dy, longitude + dx].map(n => n.toFixed(5)).join(',')
+      : `around:${radius * 1000},${latitude},${longitude}`;
+  }
   const filters = Object.entries(categories).map(([tag, values]) =>
-    `nwr[${tag}~"^(${values.join('|')})$"][name](${bounds});`);
+    `nwr[${tag}~"^(${values.join('|')})$"][name](${bounds(2)});`);
+  if (radiusKm > 2) for (const tag of ['wikidata', 'wikipedia', 'heritage']) filters.push(`nwr[name][${tag}](${bounds(radiusKm)});`);
   async function query(endpoint, post = false) {
     const url = new URL(endpoint);
     const data = `[out:json][timeout:12];(${filters.join('')});out tags center;`;
@@ -62,7 +70,7 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch } = {})
       type !== 'node' || tags.marketplace || tags.market || tags.wikidata || tags.building === 'marketplace'
     ))) continue;
     const km = distance(latitude, longitude, point.lat, point.lon);
-    if (km <= radius) places.push({ latitude: point.lat, longitude: point.lon, name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
+    if (km <= radiusKm && (km <= 2 || tags.wikidata || tags.wikipedia || tags.heritage)) places.push({ latitude: point.lat, longitude: point.lon, name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
       rank: importance(tags),
       identity: tags.wikidata,
       url: `https://www.openstreetmap.org/${type}/${id}` });
@@ -76,9 +84,6 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch } = {})
       distance(place.latitude, place.longitude, other.latitude, other.longitude) < .2);
     if (!duplicate) unique.push(place);
   }
-  // Preserve category variety while preferring landmarks and documented places.
-  const first = new Map();
-  for (const place of unique) if (!first.has(place.category)) first.set(place.category, place);
-  return [...new Set([...first.values(), ...unique])].slice(0, 12)
-    .sort((a, b) => b.rank - a.rank || a.km - b.km).map(({ rank, identity, ...place }) => place);
+  // Category quotas must not displace better documented landmarks.
+  return unique.slice(0, radiusKm === 6 ? 24 : 12).map(({ rank, identity, ...place }) => place);
 }

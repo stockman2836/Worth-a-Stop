@@ -80,6 +80,7 @@ export function walkingPanel(language, timeline, signal, onRoutes = () => {}) {
   retry.addEventListener('click', calculate);
   return {
     element,
+    mapButton: show,
     update(value) {
       const next = JSON.stringify(value.map(stop => [stop.id, stop.location]));
       if (signature === next) return;

@@ -1,14 +1,13 @@
 import { suggestCities } from './cities.mjs';
 import { featuredCities } from './sources.mjs';
-import { calendarsPanel } from './calendar-panel.mjs';
-import { placesPanel } from './places-panel.mjs';
-import { itineraryPanel } from './itinerary-panel.mjs';
+import { cityWorkspace } from './city-workspace.mjs';
 
 const copy = {
   ru: {
     official: 'Официальная афиша города', officialWait: 'Ищем официальную афишу…',
     officialEmpty: 'Ссылку на официальную афишу найти не удалось.', officialError: 'Не удалось проверить городские источники.',
-    heading: 'В какой город поедешь?', label: 'Название города', placeholder: 'Например, Будапешт',
+    heading: 'Новый город. Твой день.', label: 'Куда отправимся?', placeholder: 'Например, Будапешт',
+    eyebrow: 'ПРОГУЛКИ, КОТОРЫЕ ЗАПОМНЯТСЯ', lead: 'Интересные места, местная афиша и маршрут, который складывается в твой день.', tagline: 'Каждая остановка — открытие.',
     search: 'Найти', language: 'Язык', attribution: 'Геоданные', loading: 'Ищем города…',
     short: 'Введите хотя бы два символа.', empty: 'Совпадений нет. Попробуйте другое написание.',
     error: 'Не удалось получить данные. Попробуйте ещё раз.', found: count => `Найдено городов — ${count}`,
@@ -24,7 +23,8 @@ const copy = {
   en: {
     official: 'Official city events', officialWait: 'Looking for the official city calendar…',
     officialEmpty: 'No official calendar link found.', officialError: 'Could not check the city sources.',
-    heading: 'Which city are you visiting?', label: 'City name', placeholder: 'For example, Budapest',
+    heading: 'A new city. A day of your own.', label: 'Where shall we go?', placeholder: 'For example, Budapest',
+    eyebrow: 'MAKE A DAY OF IT', lead: 'Discover interesting places, find local events and build a day worth remembering.', tagline: 'Make every stop count.',
     search: 'Search', language: 'Language', attribution: 'Location data', loading: 'Searching for cities…',
     short: 'Enter at least two characters.', empty: 'No matches. Try another spelling.',
     error: 'Could not load cities. Try again.', found: count => `Cities found — ${count}`,
@@ -57,6 +57,8 @@ let submittedQuery = null;
 let requestId = 0;
 let timer;
 let searchController;
+let workspaceController;
+let activeWorkspace;
 let selectedCountry;
 const featured = document.querySelector('#featured');
 const featuredList = document.querySelector('#featured-cities');
@@ -66,6 +68,9 @@ function renderLanguage() {
   document.documentElement.lang = language;
   document.title = `${text.label} · Worth a Stop`;
   document.querySelector('#heading').textContent = text.heading;
+  document.querySelector('#intro-eyebrow').textContent = text.eyebrow;
+  document.querySelector('#intro-lead').textContent = text.lead;
+  document.querySelector('#tagline').textContent = text.tagline;
   document.querySelector('#query-label').textContent = text.label;
   document.querySelector('#submit').textContent = text.search;
   document.querySelector('#attribution').textContent = text.attribution;
@@ -77,7 +82,7 @@ function renderLanguage() {
   }
 }
 
-function cityRow(city, openId, initialDate, signal, placesId, selection) {
+function cityRow(city) {
   const row = document.createElement('li');
   const name = document.createElement('button');
   name.type = 'button';
@@ -88,26 +93,42 @@ function cityRow(city, openId, initialDate, signal, placesId, selection) {
   area.textContent = [city.region, city.country ?? city.countryCode].filter(Boolean).join(', ');
   zone.textContent = city.timezone;
   zone.className = 'zone';
-  const open = String(city.id) === openId;
-  const places = placesPanel(city, language, signal, String(city.id) === placesId, selection);
-  const itinerary = itineraryPanel(city, language, places, storage, signal);
-  itinerary.element.hidden = !open && String(city.id) !== placesId;
-  places.setItinerary(itinerary);
-  const panel = calendarsPanel(city, open, language, copy[language], storage, open ? initialDate : undefined, signal, places);
-  name.addEventListener('click', () => {
-    input.value = city.name;
-    submittedQuery = city.name;
-    selectedCountry = city.countryCode;
-    results.replaceChildren(row);
-    status.textContent = '';
-    panel.open = true;
-    itinerary.element.hidden = false;
-    panel.querySelector('summary').focus();
-  });
-  places.element.addEventListener('toggle', () => { if (places.element.open) itinerary.element.hidden = false; });
-  panel.addEventListener('toggle', () => { if (panel.open) itinerary.element.hidden = false; });
-  row.append(name, area, zone, places.element, panel, itinerary.element);
+  name.addEventListener('click', () => openCity(city));
+  row.append(name, area, zone);
   return row;
+}
+
+function closeCity() {
+  workspaceController?.abort();
+  activeWorkspace = undefined;
+  document.body.classList.remove('workspace-active');
+  results.replaceChildren();
+  status.textContent = '';
+  selectedCountry = undefined;
+  renderLanguage();
+  input.focus();
+  input.select();
+}
+
+function openCity(city, selection) {
+  cancelSearch();
+  workspaceController?.abort();
+  workspaceController = new AbortController();
+  const view = cityWorkspace(city, language, copy[language], storage, workspaceController.signal, selection, closeCity);
+  activeWorkspace = { city, view };
+  input.value = submittedQuery = city.name;
+  selectedCountry = city.countryCode;
+  document.body.classList.add('workspace-active');
+  const shell = document.createElement('li');
+  shell.className = 'workspace-shell';
+  shell.append(view.element);
+  results.replaceChildren(shell);
+  status.textContent = '';
+  featured.hidden = true;
+  document.title = `${city.name} · Worth a Stop`;
+  const title = view.element.querySelector('h1');
+  title.tabIndex = -1;
+  title.focus({ preventScroll: true });
 }
 
 function cancelSearch() {
@@ -116,7 +137,7 @@ function cancelSearch() {
   requestId++;
 }
 
-async function showSearch(query, openId, openSingle = false, initialDate, placesId, selection) {
+async function showSearch(query, openSingle = false) {
   cancelSearch();
   const currentRequest = requestId;
   searchController = new AbortController();
@@ -132,8 +153,8 @@ async function showSearch(query, openId, openSingle = false, initialDate, places
     const lookup = (url, options) => fetch(url, { ...options, signal: AbortSignal.any([options.signal, signal]) });
     const { cities, correction } = await suggestCities(query, lookup, language, selectedCountry);
     if (currentRequest !== requestId) return;
-    if (!openId && openSingle && cities.length === 1) openId = String(cities[0].id);
-    results.replaceChildren(...cities.map(city => cityRow(city, openId, initialDate, signal, placesId, selection)));
+    if (openSingle && cities.length === 1) { openCity(cities[0]); return; }
+    results.replaceChildren(...cities.map(cityRow));
     status.textContent = correction ? text.corrected(correction) : cities.length ? text.found(cities.length) : text.empty;
   } catch {
     if (currentRequest === requestId) status.textContent = text.error;
@@ -167,7 +188,7 @@ form.addEventListener('submit', event => {
   event.preventDefault();
   submittedQuery = input.value.trim();
   featured.hidden = Boolean(submittedQuery) || !featuredList.childElementCount;
-  showSearch(submittedQuery, undefined, true);
+  showSearch(submittedQuery, true);
 });
 
 for (const button of buttons) {
@@ -176,15 +197,8 @@ for (const button of buttons) {
     language = button.dataset.language;
     try { storage?.setItem(preferenceKey, language); } catch { /* Optional preference. */ }
     renderLanguage();
-    if (submittedQuery !== null) {
-      const panel = results.querySelector('details[data-city-id][open]');
-      const placesId = results.querySelector('details[data-places-id][open]')?.dataset.placesId;
-      const selectedPlaces = results.querySelector('details[data-places-id][open]');
-      const selection = selectedPlaces && { date: selectedPlaces.querySelector('input[type=date]').value,
-        time: selectedPlaces.querySelector('input[type=time]').value,
-        available: selectedPlaces.querySelector('input[type=checkbox]').checked };
-      showSearch(submittedQuery, panel?.dataset.cityId, false, panel?.querySelector('input[type=date]')?.value, placesId, selection);
-    }
+    if (activeWorkspace) openCity(activeWorkspace.city, activeWorkspace.view.selection());
+    else if (submittedQuery !== null) showSearch(submittedQuery);
   });
 }
 
@@ -199,7 +213,7 @@ featuredCities().then(cities => {
       submittedQuery = city.name;
       selectedCountry = city.countryCode;
       featured.hidden = true;
-      showSearch(city.name, undefined, true);
+      showSearch(city.name, true);
     });
     featuredList.append(button);
   }

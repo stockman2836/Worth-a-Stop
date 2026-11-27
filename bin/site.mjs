@@ -18,6 +18,8 @@ const assets = new Map([
   ['/walking-legs.mjs', ['../src/walking-legs.mjs', 'text/javascript']],
   ['/walking-panel.mjs', ['../web/walking-panel.mjs', 'text/javascript']],
   ['/arrival-times.mjs', ['../src/arrival-times.mjs', 'text/javascript']],
+  ['/trip-window.mjs', ['../src/trip-window.mjs', 'text/javascript']],
+  ['/city-workspace.mjs', ['../web/city-workspace.mjs', 'text/javascript']],
   ['/starting-point.mjs', ['../src/starting-point.mjs', 'text/javascript']],
   ['/alternatives.mjs', ['../src/alternatives.mjs', 'text/javascript']],
   ['/alternatives-panel.mjs', ['../web/alternatives-panel.mjs', 'text/javascript']],

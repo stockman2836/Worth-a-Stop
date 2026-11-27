@@ -6,8 +6,9 @@ import { localInstant, visitOpeningState } from './opening-hours.mjs';
 import { alternativesPanel } from './alternatives-panel.mjs';
 import { orderPanel } from './order-panel.mjs';
 import { startingPointStore, withStartingPoint } from './starting-point.mjs';
+import { checkTripWindow } from './trip-window.mjs';
 
-const unsavedStarts = new Map();
+const unsavedTimes = new Map();
 
 const copy = {
   ru: { title: 'План дня', date: 'Дата плана', add: 'Добавить в план', empty: 'Добавьте места и события из подборки.',
@@ -16,6 +17,13 @@ const copy = {
     minutes: 'Время посещения, мин', unknown: 'Время события не указано', invalid: 'Укажите от 1 до 1440 минут.',
     fixed: 'Время организатора', invalidDate: 'Выберите дату плана.',
     start: 'Время начала прогулки', arrival: 'Прибытие', departure: 'Уход', waiting: 'Ожидание',
+    end: 'Закончить до', settings: 'Настройки старта', walking: 'Переходы и расстояния',
+    begin: 'Составь свой день', beginHint: 'Добавь интересное место или событие. Здесь появятся остановки и время прогулки.', explore: 'Посмотреть места',
+    count: n => `Остановок: ${n}`, windowFits: n => `До выбранного окончания остаётся ${n} мин.`,
+    windowOverrun: n => `План заканчивается на ${n} мин. позже выбранного времени.`,
+    windowUnknown: 'Чтобы проверить время окончания, завершите расчёт остановок.',
+    windowInvalid: 'Окончание должно быть позже старта в тот же день.', windowStart: 'Укажите время начала прогулки.',
+    windowTime: 'Это местное время неоднозначно или не существует. Выберите другое.', windowUnsaved: 'Время окончания доступно в текущей вкладке.',
     origin: 'Точка старта', pickOrigin: 'Выбрать старт на карте', resetOrigin: 'Старт у первой остановки',
     firstOrigin: 'Старт — у первой остановки.', picking: 'Выберите точку на карте.',
     originUnsaved: 'Точка старта доступна в текущей вкладке.',
@@ -41,6 +49,13 @@ const copy = {
     minutes: 'Visit duration, min', unknown: 'Event time unspecified', invalid: 'Enter 1 to 1440 minutes.',
     fixed: 'Publisher time', invalidDate: 'Choose a plan date.',
     start: 'Walking start time', arrival: 'Arrival', departure: 'Departure', waiting: 'Waiting',
+    end: 'Finish by', settings: 'Starting point settings', walking: 'Walking legs and distances',
+    begin: 'Make this day yours', beginHint: 'Add a place or an event. Your stops and walking schedule will appear here.', explore: 'Explore places',
+    count: n => `Stops: ${n}`, windowFits: n => `${n} min remain before your selected finish time.`,
+    windowOverrun: n => `The plan finishes ${n} min after your selected finish time.`,
+    windowUnknown: 'Complete the stop timings to check the finish time.',
+    windowInvalid: 'Finish time must be later than the start on the same day.', windowStart: 'Choose a walking start time.',
+    windowTime: 'This local time is ambiguous or does not exist. Choose another.', windowUnsaved: 'Finish time is available in this tab.',
     origin: 'Starting point', pickOrigin: 'Choose start on map', resetOrigin: 'Start at the first stop',
     firstOrigin: 'The walk starts at the first stop.', picking: 'Choose a point on the map.',
     originUnsaved: 'Starting point is available in this tab.',
@@ -62,7 +77,7 @@ const copy = {
       'event-ended': 'The event ends before arrival. Check the plan.' } },
 };
 
-export function itineraryPanel(city, language, timeline, storage, signal) {
+export function itineraryPanel(city, language, timeline, storage, signal, onExplore) {
   const text = copy[language];
   const store = itineraryStore(city.id, storage);
   const points = startingPointStore(city.id, storage);
@@ -73,6 +88,7 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
   title.textContent = text.title;
   const label = document.createElement('label');
   label.className = 'day-picker';
+  label.classList.add('itinerary-date');
   const caption = document.createElement('span');
   caption.textContent = text.date;
   const date = document.createElement('input');
@@ -99,6 +115,26 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
   startInput.type = 'time';
   startInput.step = '60';
   startLabel.append(text.start, startInput);
+  const endLabel = document.createElement('label');
+  endLabel.className = 'day-picker itinerary-end';
+  const endInput = document.createElement('input');
+  endInput.type = 'time';
+  endInput.step = '60';
+  endLabel.append(text.end, endInput);
+  const windowStatus = document.createElement('p');
+  windowStatus.className = 'trip-window-status';
+  windowStatus.setAttribute('role', 'status');
+  const count = document.createElement('span');
+  count.className = 'plan-count';
+  title.append(count);
+  const emptyState = document.createElement('div');
+  emptyState.className = 'itinerary-empty';
+  const emptyTitle = document.createElement('h3');
+  emptyTitle.textContent = text.begin;
+  const emptyHint = document.createElement('p');
+  emptyHint.textContent = text.beginHint;
+  emptyState.append(emptyTitle, emptyHint);
+  if (onExplore) emptyState.append(button(text.explore, onExplore));
   const originControls = document.createElement('div');
   originControls.className = 'itinerary-actions origin-controls';
   const chooseOrigin = button(text.pickOrigin, () => {
@@ -118,23 +154,35 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
   const timingStatus = document.createElement('p');
   timingStatus.className = 'timing-status';
   timingStatus.setAttribute('role', 'status');
-  element.append(title, label, startLabel, originControls, originStatus, zone, timingStatus, list, status);
+  const settings = document.createElement('details');
+  settings.className = 'plan-settings';
+  const settingsTitle = document.createElement('summary');
+  settingsTitle.textContent = text.settings;
+  settings.append(settingsTitle, originControls, originStatus, zone);
+  element.append(title, label, startLabel, endLabel, emptyState, settings, timingStatus, windowStatus, list, status);
   let currentStops = [];
   let routeLegs = [];
   let replacementController;
   let alternativePanels = [];
-  function startKey() { return `worth-a-stop.itinerary.start.v1.${city.id}.${activeDay}`; }
-  function readStart() {
-    const key = startKey();
-    if (unsavedStarts.has(key)) return unsavedStarts.get(key);
+  function timeKey(kind) { return `worth-a-stop.itinerary.${kind}.v1.${city.id}.${activeDay}`; }
+  function readTime(kind) {
+    const key = timeKey(kind);
+    if (unsavedTimes.has(key)) return unsavedTimes.get(key);
     try { return storage?.getItem(key) || ''; } catch { return ''; }
   }
-  startInput.value = readStart();
+  const readStart = () => readTime('start');
+  startInput.value = readTime('start');
+  endInput.value = readTime('end');
   const walking = walkingPanel(language, timeline, signal, legs => {
     routeLegs = legs;
     updateArrivals();
   });
-  element.append(walking.element);
+  const walks = document.createElement('details');
+  walks.className = 'walking-details';
+  const walksTitle = document.createElement('summary');
+  walksTitle.textContent = text.walking;
+  walks.append(walksTitle, walking.element);
+  element.append(walks);
   const when = new Intl.DateTimeFormat(language, { timeZone: city.timezone || 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   const minutes = new Intl.NumberFormat(language, { style: 'unit', unit: 'minute', maximumFractionDigits: 0 });
   const coordinate = new Intl.NumberFormat(language, { maximumFractionDigits: 5 });
@@ -181,21 +229,31 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
       }
     }
     const finish = times.at(-1)?.departure;
-    timingStatus.textContent = [!startInput.value ? text.chooseStart : start === undefined ? text.invalidStart :
+    timingStatus.textContent = [!currentStops.length ? '' : !startInput.value ? text.chooseStart : start === undefined ? text.invalidStart :
       times.some(time => time.reason) ? text.partial : finish != null ? text.finish + ' · ' + when.format(finish) : '',
       conflicts > 0 && text.conflicts(conflicts),
-      unsavedStarts.has(startKey()) && text.startUnsaved].filter(Boolean).join(' ');
+      unsavedTimes.has(timeKey('start')) && text.startUnsaved].filter(Boolean).join(' ');
+    const windowCheck = checkTripWindow(activeDay, startInput.value, endInput.value, city.timezone || 'UTC', finish);
+    windowStatus.dataset.state = windowCheck.state;
+    windowStatus.textContent = [windowCheck.state === 'fits' ? text.windowFits(windowCheck.minutes) :
+      windowCheck.state === 'overrun' ? text.windowOverrun(windowCheck.minutes) :
+      windowCheck.state === 'missing-start' ? text.windowStart : windowCheck.state === 'invalid-time' ? text.windowTime :
+      windowCheck.state === 'end-before-start' ? text.windowInvalid : windowCheck.state === 'unknown-finish' ? text.windowUnknown : '',
+      unsavedTimes.has(timeKey('end')) && text.windowUnsaved].filter(Boolean).join(' ');
+    endInput.setCustomValidity(['invalid-time', 'end-before-start'].includes(windowCheck.state) ? windowStatus.textContent : '');
     for (const panel of alternativePanels) panel.check();
   }
-  startInput.addEventListener('change', () => {
-    const key = startKey();
+  function saveTime(kind, input) {
+    const key = timeKey(kind);
     try {
       if (!storage) throw Error('Storage unavailable');
-      storage.setItem(key, startInput.value);
-      unsavedStarts.delete(key);
-    } catch { unsavedStarts.set(key, startInput.value); }
+      storage.setItem(key, input.value);
+      unsavedTimes.delete(key);
+    } catch { unsavedTimes.set(key, input.value); }
     updateArrivals();
-  });
+  }
+  startInput.addEventListener('change', () => saveTime('start', startInput));
+  endInput.addEventListener('change', () => saveTime('end', endInput));
 
   function button(labelText, action) {
     const button = document.createElement('button');
@@ -211,6 +269,8 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
     replacementController = new AbortController();
     alternativePanels = [];
     currentStops = result.stops;
+    emptyState.hidden = currentStops.length > 0;
+    count.textContent = text.count(currentStops.length);
     origin = points.read(activeDay).point;
     timeline.setOrigin(origin);
     showOriginStatus();
@@ -276,7 +336,8 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
       item.append(actions);
       list.append(item);
     }
-    status.textContent = [feedback, !result.stops.length && text.empty, result.saved ? text.saved : text.temporary].filter(Boolean).join(' ');
+    status.textContent = [feedback, result.saved ? text.saved : text.temporary].filter(Boolean).join(' ');
+    walks.hidden = withStartingPoint(result.stops, origin, text.origin).length < 2;
     walking.update(withStartingPoint(result.stops, origin, text.origin));
     updateArrivals();
   }
@@ -285,6 +346,7 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
     date.value = day;
     activeDay = day;
     startInput.value = readStart();
+    endInput.value = readTime('end');
     try { storage?.setItem(preference, day); } catch { /* The plan can still be edited. */ }
     render();
   }
@@ -293,10 +355,12 @@ export function itineraryPanel(city, language, timeline, storage, signal) {
     else date.value = activeDay;
   });
   timeline.onDayChange(setDay);
-  window.addEventListener('storage', () => { startInput.value = readStart(); render(); }, { signal });
+  window.addEventListener('storage', () => { startInput.value = readStart(); endInput.value = readTime('end'); render(); }, { signal });
   render();
   return {
     element,
+    controls: { date: label, start: startLabel, end: endLabel },
+    mapButton: walking.mapButton,
     button(item, type) {
       const add = button(text.add, () => {
         try { nextDate(timeline.getDay()); } catch { status.textContent = text.invalidDate; return; }

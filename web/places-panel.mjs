@@ -95,6 +95,7 @@ export function placesPanel(city, language, signal, open, selection) {
     return input;
   }
   const day = field('date', text.date, selection?.date ?? todayIn(zone));
+  day.parentElement.classList.add('map-date');
   const clock = field('time', text.time, selection?.time ?? localClock(zone));
   const slider = document.createElement('input');
   slider.type = 'range';
@@ -254,6 +255,10 @@ export function placesPanel(city, language, signal, open, selection) {
   updateHours();
   return {
     element: details,
+    mapElements: { canvas: mapBox, picker: pickerBox, legend, credit },
+    previewElements: { controls, slider, filter: filterLabel, message: filterMessage },
+    selection() { return { date: day.value, time: clock.value, available: filter.checked }; },
+    setTime(value) { clock.value = value; updateHours(); },
     setDay,
     getDay() { return day.value; },
     onDayChange(listener) { dayListeners.add(listener); },

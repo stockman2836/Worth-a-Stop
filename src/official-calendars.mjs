@@ -2,6 +2,7 @@ import https from 'node:https';
 import { lookup } from 'node:dns/promises';
 import ipaddr from 'ipaddr.js';
 import { load } from 'cheerio';
+import { cityWebsites } from './city-websites.mjs';
 
 function website(value) {
   if (!URL.canParse(value)) return null;
@@ -39,18 +40,35 @@ export async function page(url, redirects = 0) {
   return { url, html: Buffer.concat(chunks).toString() };
 }
 
-export function calendarLink({ url, html }) {
+export function calendarLinks({ url, html }) {
   const $ = load(html);
-  const section = /^(events?|what.s on|calendar of events|event calendar|veranstaltungen|veranstaltungskalender|akce|kalendář akcí|podujatia|kalendár podujatí|agenda|événements|eventos|eventi|афиша|события)$/iu;
+  const section = /^(events?|what.s on|calendar of events|event calendar|veranstaltungen|veranstaltungskalender|akce|kalendář akcí|podujatia|kalendár podujatí|kalendarz (?:wydarzeń|imprez)|wydarzenia|események|programok|agenda|événements|eventos|eventi|evenementen|evenemang|tapahtumat|афиша|события|мероприятия|події|календар подій)(?:\s*\(\d+\))?$/iu;
+  const links = new Set();
   for (const a of $('a[href]').toArray()) {
     const href = $(a).attr('href');
     if (!href || href.startsWith('#') || !URL.canParse(href, url)) continue;
     const target = website(new URL(href, url).href);
-    if (!target || target.hostname.replace(/^www\./, '') !== url.hostname.replace(/^www\./, '')) continue;
+    const host = url.hostname.replace(/^www\./, '');
+    if (!target || !(target.hostname.replace(/^www\./, '') === host || target.hostname.endsWith('.' + host))) continue;
     const segment = target.pathname.replace(/\/+$/, '').split('/').pop().replace(/[-_]/g, ' ');
-    if (section.test(segment) || section.test($(a).text().trim())) return target.href;
+    if (section.test(segment) || section.test($(a).text().replace(/\s+/g, ' ').trim())) { target.hash = ''; links.add(target.href); }
   }
-  return null;
+  return [...links].slice(0, 6);
+}
+
+export function calendarLink(document) { return calendarLinks(document)[0] ?? null; }
+
+export function visitorLinks({ url, html }) {
+  const $ = load(html);
+  const links = new Set();
+  const label = /^(?:tourism|tourist information|tourism portal|official tourism(?: website| portal)?|visit(?:ors?| .+)?|for visitors|turizmus|turistika|cestovný ruch|pre návštevníkov|pro turisty|tourismus|für gäste|tourisme|turismo|для туристов|туризм)$/iu;
+  for (const anchor of $('a[href]').toArray()) {
+    if (!label.test($(anchor).text().replace(/\s+/g, ' ').trim())) continue;
+    const href = $(anchor).attr('href');
+    const target = href && URL.canParse(href, url) && website(new URL(href, url).href);
+    if (target && target.href !== url.href) { target.hash = ''; links.add(target.href); }
+  }
+  return [...links].slice(0, 3);
 }
 
 async function json(url) {
@@ -62,36 +80,66 @@ async function json(url) {
   return data;
 }
 
-async function tourismPortal(title) {
+async function tourismPortal(title, language, fetchJSON) {
   async function article(params) {
-    const url = new URL('https://en.wikipedia.org/w/api.php');
+    const url = new URL(`https://${language}.wikipedia.org/w/api.php`);
     url.search = new URLSearchParams({ action: 'parse', page: title, format: 'json', formatversion: '2', ...params });
-    return (await json(url)).parse;
+    return (await fetchJSON(url)).parse;
   }
   const { sections } = await article({ prop: 'sections' });
-  const section = sections.find(s => s.anchor === 'External_links');
+  const section = sections.find(s => /^(External_links|Externé_odkazy|Externí_odkazy|Weblinks|Liens_externes|Enlaces_externos|Collegamenti_esterni|Linki_zewnętrzne|További_információk|Ссылки|Посилання)$/iu.test(s.anchor));
   if (!section) return null;
   const $ = load((await article({ prop: 'text', section: section.index })).text);
-  const link = $('a.external').toArray().find(a => /official.*(?:touris|visitor)|(?:touris|visitor).*official/i.test($(a).text()));
+  const link = $('a.external').toArray().find(a => /official.*(?:touris|visitor)|(?:touris|visitor).*official|ofici[aá]ln[yaí].*turis|offizielle.*touris|touris.*officiel|oficjaln.*turyst|официальн.*турис/iu.test($(a).text()));
   return link && website($(link).attr('href'));
 }
 
-export async function officialCalendars(id) {
+async function discoverCalendars(id, { fetchJSON = json, readPage = page } = {}) {
   if (!/^[1-9]\d{0,9}$/.test(id)) throw Error('Invalid GeoNames ID');
-  const query = `SELECT ?site ?title WHERE { ?city wdt:P1566 "${id}". OPTIONAL { ?city wdt:P856 ?site }
-    OPTIONAL { ?article schema:about ?city; schema:isPartOf <https://en.wikipedia.org/>; schema:name ?title } } LIMIT 8`;
+  const query = `SELECT ?site ?title ?wiki WHERE { ?city wdt:P1566 "${id}". OPTIONAL { ?city wdt:P856 ?site }
+    OPTIONAL { ?article schema:about ?city; schema:isPartOf ?wiki; schema:name ?title.
+      FILTER(CONTAINS(STR(?wiki), ".wikipedia.org/")) } } LIMIT 1000`;
   const url = new URL('https://query.wikidata.org/sparql');
   url.search = new URLSearchParams({ format: 'json', query });
-  const rows = (await json(url)).results.bindings;
-  const sites = [...new Set(rows.map(r => r.site?.value).filter(Boolean))].map(website).filter(Boolean);
-  const title = rows.find(r => r.title)?.title.value;
+  let rows = [], directoryError;
+  try { rows = (await fetchJSON(url)).results.bindings; } catch (error) { directoryError = error; }
+  if (!rows.some(row => row.site?.value)) {
+    try { rows.push(...await cityWebsites(id, fetchJSON)); }
+    catch (error) { if (directoryError) throw directoryError; if (!rows.length) throw error; }
+  }
+  const sites = [...new Set(rows.map(r => r.site?.value).filter(Boolean))].map(website).filter(Boolean).slice(0, 4);
+  const local = sites[0]?.hostname.split('.').pop();
+  const articles = new Map();
+  for (const row of rows) {
+    const language = /^https:\/\/([a-z-]+)\.wikipedia\.org\/$/.exec(row.wiki?.value)?.[1];
+    if (language && row.title) articles.set(language, row.title.value);
+  }
+  const languages = [...articles.keys()].sort((a,b) =>
+    Number(b === local) - Number(a === local) || Number(b === 'en') - Number(a === 'en')).slice(0, 3);
   const jobs = sites.map(site => Promise.resolve(site));
-  if (title) jobs.push(tourismPortal(title));
+  for (const language of languages) jobs.push(tourismPortal(articles.get(language), language, fetchJSON));
   const results = await Promise.allSettled(jobs.map(async job => {
     const site = await job;
-    return site && calendarLink(await page(site));
+    if (!site) return [];
+    const home = await readPage(site);
+    const links = calendarLinks(home);
+    const visitors = await Promise.allSettled(visitorLinks(home).map(async href => calendarLinks(await readPage(new URL(href)))));
+    links.push(...visitors.flatMap(r => r.status === 'fulfilled' ? r.value : []));
+    return links;
   }));
-  const links = [...new Set(results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value))];
+  const links = [...new Set(results.flatMap(r => r.status === 'fulfilled' ? r.value : []))].slice(0, 8);
   if (!links.length && results.some(r => r.status === 'rejected')) throw results.find(r => r.status === 'rejected').reason;
   return links;
+}
+
+const cache = new Map();
+export async function officialCalendars(id, dependencies) {
+  if (!/^[1-9]\d{0,9}$/.test(id)) throw Error('Invalid GeoNames ID');
+  if (dependencies) return discoverCalendars(id, dependencies);
+  const saved = cache.get(id);
+  if (saved?.expires > Date.now()) return saved.promise;
+  const promise = discoverCalendars(id);
+  if (cache.size >= 80) cache.delete(cache.keys().next().value);
+  cache.set(id, { promise, expires: Date.now() + 600000 });
+  try { return await promise; } catch (error) { if (cache.get(id)?.promise === promise) cache.delete(id); throw error; }
 }

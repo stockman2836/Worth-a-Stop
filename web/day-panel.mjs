@@ -5,6 +5,10 @@ const copy = {
     today: 'Сегодня', tomorrow: 'Завтра', date: 'Дата поездки', loading: 'Ищем события…',
     empty: 'В проверенных афишах нет событий на этот день', partial: 'Показаны результаты из доступной части афиш',
     official: 'Городская афиша', waiting: 'Проверяем остальные источники…',
+    sources: 'Проверенные городские афиши', noSources: 'Городские афиши пока не найдены',
+    sourceEmpty: 'Публикаций с датами не найдено', sourceFailed: 'Часть страниц недоступна',
+    sourceLimited: 'Проверена часть страниц', sourceRead: 'Даты прочитаны',
+    sourceCount: (pages, events) => `Страниц проверено: ${pages}, публикаций с датами: ${events}`,
     showMap: 'Показать на карте', noLocation: 'Точное расположение не указано',
     error: 'Не удалось загрузить расписания.', retry: 'Попробовать снова', more: 'Ещё события',
     count: n => `Событий в афише — ${n}`, area: km => `До ${km} км от центра`,
@@ -15,6 +19,10 @@ const copy = {
     today: 'Today', tomorrow: 'Tomorrow', date: 'Trip date', loading: 'Looking up events…',
     empty: 'No events found for this day in the listings checked', partial: 'Only part of the listings could be checked',
     official: 'City calendar', waiting: 'Checking the remaining sources…',
+    sources: 'City calendars checked', noSources: 'No city calendars discovered yet',
+    sourceEmpty: 'No dated listings found', sourceFailed: 'Some pages were unavailable',
+    sourceLimited: 'Only part of the pages checked', sourceRead: 'Published dates read',
+    sourceCount: (pages, events) => `Pages checked: ${pages}, dated listings: ${events}`,
     showMap: 'Show on map', noLocation: 'Exact location unspecified',
     error: 'Could not load the schedules.', retry: 'Try again', more: 'More events',
     count: n => `${n} ${n === 1 ? 'event' : 'events'} listed`, area: km => `Within ${km} km of the centre`,
@@ -40,6 +48,13 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
   const list = view.querySelector('ul');
   const more = view.querySelector('.more-events');
   const retry = view.querySelector('.retry-events');
+  const coverage = document.createElement('details');
+  coverage.className = 'calendar-coverage';
+  const coverageTitle = document.createElement('summary');
+  const coverageList = document.createElement('ul');
+  coverage.append(coverageTitle, coverageList);
+  coverage.hidden = true;
+  view.append(coverage);
   const text = copy[language];
   const zone = city.timezone || 'UTC';
   const clock = new Intl.DateTimeFormat(language, { timeZone: zone, hour: '2-digit', minute: '2-digit' });
@@ -101,12 +116,13 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
     showMore(count);
   }
 
-  async function load() {
+  async function load(refresh = false) {
     controller?.abort();
     controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, searchSignal]);
     const day = input.value;
     events = [];
+    coverage.hidden = true;
     eventMap.setDay(day);
     const localToday = todayIn(zone);
     today.setAttribute('aria-pressed', String(day === localToday));
@@ -128,6 +144,23 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
       eventMap.setEvents(events);
       const incomplete = results.some(r => r.incomplete) || finished > results.length;
       const area = results.find(r => r.radiusKm)?.radiusKm;
+      const official = results.find(r => Array.isArray(r.sources));
+      if (official) {
+        coverage.hidden = false;
+        coverageTitle.textContent = official.sources.length ? text.sources : text.noSources;
+        coverageList.replaceChildren();
+        for (const source of official.sources) {
+          const item = document.createElement('li');
+          const link = document.createElement('a');
+          link.href = source.url;
+          const url = new URL(source.url);
+          link.textContent = url.hostname + url.pathname;
+          const status = source.failedPages ? text.sourceFailed : source.limited ? text.sourceLimited :
+            source.eventsFound ? text.sourceRead : text.sourceEmpty;
+          item.append(link, ' · ' + status + ' · ' + text.sourceCount(source.pagesRead, source.eventsFound));
+          coverageList.append(item);
+        }
+      }
       message.textContent = [events.length ? text.count(events.length) : finished === 2 && results.length && text.empty,
         finished < 2 && text.waiting, !results.length && finished === 2 ? text.error : incomplete && text.partial,
         area && 'OpenAgenda · ' + text.area(area), zone].filter(Boolean).join(' · ');
@@ -137,7 +170,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
       showMore(visibleCount);
     }
     receive(findDayEvents(city, day, { signal }));
-    receive(fetch('/api/official-events/' + city.id, { signal }).then(async response => {
+    receive(fetch('/api/official-events/' + city.id + (refresh === true ? '?refresh=1' : ''), { signal, cache: refresh === true ? 'reload' : 'default' }).then(async response => {
       if (!response.ok) throw Error('City calendar unavailable');
       return officialOnDay(await response.json(), day, zone);
     }));
@@ -146,7 +179,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
   tomorrow.addEventListener('click', () => { input.value = nextDate(todayIn(zone)); load(); });
   input.addEventListener('change', load);
   more.addEventListener('click', () => showMore());
-  retry.addEventListener('click', load);
+  retry.addEventListener('click', () => load(true));
   eventMap.onDayChange(value => { if (input.value !== value) { input.value = value; load(); } });
   eventMap.onTimeChange(renderEvents);
   load();

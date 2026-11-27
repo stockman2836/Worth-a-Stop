@@ -59,7 +59,7 @@ export function calendarsPanel(city, open, language, text, storage, initialDate,
   async function loadOfficial(force) {
     official.textContent = text.officialWait;
     try {
-      const response = await fetch('/api/official-calendars/' + city.id, { signal, cache: force ? 'reload' : 'default' });
+      const response = await fetch('/api/official-calendars/' + city.id + (force ? '?refresh=1' : ''), { signal, cache: force ? 'reload' : 'default' });
       if (!response.ok) throw Error();
       const links = await response.json();
       official.textContent = links.length ? '' : text.officialEmpty;

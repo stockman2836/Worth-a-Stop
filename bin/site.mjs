@@ -82,10 +82,11 @@ const server = createServer(async (request, response) => {
     }
     return;
   }
-  const lookup = /^\/api\/official-(calendars|events)\/([1-9]\d{0,9})$/.exec(request.url);
+  const lookup = /^\/api\/official-(calendars|events)\/([1-9]\d{0,9})$/.exec(request.url.split('?')[0]);
   if (lookup && request.method === 'GET') {
     try {
-      const data = lookup[1] === 'events' ? await officialEvents(lookup[2]) : await officialCalendars(lookup[2]);
+      const refresh = new URL(request.url, 'http://localhost').searchParams.get('refresh') === '1';
+      const data = lookup[1] === 'events' ? await officialEvents(lookup[2], { refresh }) : await officialCalendars(lookup[2], refresh ? {} : undefined);
       response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=600' }).end(JSON.stringify(data));
     } catch {
       response.writeHead(502).end();

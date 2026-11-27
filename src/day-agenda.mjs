@@ -82,7 +82,7 @@ export function officialOnDay(data, day, zone) {
       if (timing) events.push({ ...event, ...timing });
     } catch { incomplete = true; }
   }
-  return { events, incomplete };
+  return { events, incomplete, ...(Array.isArray(data.sources) && { sources: data.sources }) };
 }
 
 export function mergeListings(events) {

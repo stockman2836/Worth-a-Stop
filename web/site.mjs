@@ -8,6 +8,7 @@ const copy = {
     officialEmpty: 'Ссылку на официальную афишу найти не удалось.', officialError: 'Не удалось проверить городские источники.',
     heading: 'Новый город. Твой день.', label: 'Куда отправимся?', placeholder: 'Например, Будапешт',
     eyebrow: 'ПРОГУЛКИ, КОТОРЫЕ ЗАПОМНЯТСЯ', lead: 'Интересные места, местная афиша и маршрут, который складывается в твой день.', tagline: 'Каждая остановка — открытие.',
+    journey: 'Один город. Твой маршрут.',
     search: 'Найти', language: 'Язык', attribution: 'Геоданные', loading: 'Ищем города…',
     short: 'Введите хотя бы два символа.', empty: 'Совпадений нет. Попробуйте другое написание.',
     error: 'Не удалось получить данные. Попробуйте ещё раз.', found: count => `Найдено городов — ${count}`,
@@ -25,6 +26,7 @@ const copy = {
     officialEmpty: 'No official calendar link found.', officialError: 'Could not check the city sources.',
     heading: 'A new city. A day of your own.', label: 'Where shall we go?', placeholder: 'For example, Budapest',
     eyebrow: 'MAKE A DAY OF IT', lead: 'Discover interesting places, find local events and build a day worth remembering.', tagline: 'Make every stop count.',
+    journey: 'One city. Your way.',
     search: 'Search', language: 'Language', attribution: 'Location data', loading: 'Searching for cities…',
     short: 'Enter at least two characters.', empty: 'No matches. Try another spelling.',
     error: 'Could not load cities. Try again.', found: count => `Cities found — ${count}`,
@@ -67,7 +69,12 @@ function renderLanguage() {
   const text = copy[language];
   document.documentElement.lang = language;
   document.title = `${text.label} · Worth a Stop`;
-  document.querySelector('#heading').textContent = text.heading;
+  const split = text.heading.indexOf('.') + 1;
+  const accent = document.createElement('span');
+  accent.className = 'heading-accent';
+  accent.textContent = text.heading.slice(split).trim();
+  document.querySelector('#heading').replaceChildren(text.heading.slice(0, split), document.createElement('br'), accent);
+  document.querySelector('#journey-caption').textContent = text.journey;
   document.querySelector('#intro-eyebrow').textContent = text.eyebrow;
   document.querySelector('#intro-lead').textContent = text.lead;
   document.querySelector('#tagline').textContent = text.tagline;

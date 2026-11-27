@@ -9,6 +9,7 @@ import { createWalkingRouter } from '../src/walking-router.mjs';
 const assets = new Map([
   ['/', ['../web/index.html', 'text/html']],
   ['/site.css', ['../web/site.css', 'text/css']],
+  ['/appearance.js', ['../web/appearance.js', 'text/javascript']],
   ['/site.mjs', ['../web/site.mjs', 'text/javascript']],
   ['/calendar-panel.mjs', ['../web/calendar-panel.mjs', 'text/javascript']],
   ['/day-panel.mjs', ['../web/day-panel.mjs', 'text/javascript']],

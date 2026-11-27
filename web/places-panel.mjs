@@ -228,10 +228,13 @@ export function placesPanel(city, language, signal, open, selection) {
         const info = document.createElement('span');
         info.className = 'event-venue';
         const distance = place.km < 1 ? metres.format(place.km * 1000) : km.format(place.km);
-        info.textContent = [text[place.category], distance, place.hours && text.hours + ' · ' + place.hours].filter(Boolean).join(' · ');
+        info.textContent = [distance, place.hours && text.hours + ' · ' + place.hours].filter(Boolean).join(' · ');
         const badge = document.createElement('span');
         badge.className = 'opening-state';
-        item.append(show, badge, info, link, itinerary.button(place, 'place'));
+        const category = document.createElement('span');
+        category.className = 'place-category';
+        category.textContent = text[place.category] || place.category;
+        item.append(category, show, badge, info, link, itinerary.button(place, 'place'));
         list.append(item);
       }
       loadedPlaces = places;

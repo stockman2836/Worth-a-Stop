@@ -1,7 +1,10 @@
 import * as L from './leaflet.mjs';
 
 export function placesMap(container, city, places, labels, onSelect) {
-  const map = L.map(container, { scrollWheelZoom: true, zoomControl: false })
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  // Leaflet 1.9 can complete a zoom after a replaced map has already been removed.
+  const map = L.map(container, { scrollWheelZoom: true, zoomControl: false, zoomAnimation: false,
+    fadeAnimation: !motion.matches, markerZoomAnimation: !motion.matches })
     .setView([city.latitude, city.longitude], 14);
   L.control.zoom({ zoomInTitle: labels.zoomIn, zoomOutTitle: labels.zoomOut }).addTo(map);
   const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -31,7 +34,7 @@ export function placesMap(container, city, places, labels, onSelect) {
     marker.on('popupopen', () => onSelect(index));
     return marker;
   });
-  if (markers.length) map.fitBounds(L.latLngBounds(markers.map(marker => marker.getLatLng())), { padding: [32, 32], maxZoom: 16 });
+  if (markers.length) map.fitBounds(L.latLngBounds(markers.map(marker => marker.getLatLng())), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
   const resize = new ResizeObserver(() => map.invalidateSize({ pan: false }));
   resize.observe(container);
   const eventLayer = L.layerGroup().addTo(map);
@@ -84,7 +87,7 @@ export function placesMap(container, city, places, labels, onSelect) {
       const icon = L.divIcon({ className: 'place-marker alternative-marker', html: '<span></span>', iconSize: [28, 28], iconAnchor: [14, 14] });
       const marker = L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title })
         .bindPopup(content).addTo(previewLayer);
-      map.setView(marker.getLatLng(), 16);
+      map.setView(marker.getLatLng(), 16, { animate: !motion.matches });
       marker.openPopup();
     },
     setRoute(legs, stops, fit = false) {
@@ -106,7 +109,7 @@ export function placesMap(container, city, places, labels, onSelect) {
       }
       const points = legs.filter(leg => leg.status === 'ok').flatMap(leg => leg.geometry.coordinates.map(([lon, lat]) => [lat, lon]));
       points.push(...stops.filter(stop => stop.location).map(stop => [stop.location.latitude, stop.location.longitude]));
-      if (fit && points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16 });
+      if (fit && points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
     },
     setStates(states, onlyAvailable) {
       for (const [i, marker] of markers.entries()) {
@@ -119,7 +122,7 @@ export function placesMap(container, city, places, labels, onSelect) {
         if (element) element.dataset.state = states[i].state;
       }
     },
-    select(index) { map.setView(markers[index].getLatLng(), Math.max(16, map.getZoom())); markers[index].openPopup(); },
+    select(index) { map.setView(markers[index].getLatLng(), Math.max(16, map.getZoom()), { animate: !motion.matches }); markers[index].openPopup(); },
     setEvents(events) {
       eventLayer.clearLayers();
       eventMarkers.clear();
@@ -140,7 +143,7 @@ export function placesMap(container, city, places, labels, onSelect) {
         eventMarkers.set(event, marker);
       }
       const points = [...markers, ...eventMarkers.values()].map(marker => marker.getLatLng());
-      if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16 });
+      if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
     },
     setEventStates(states, onlyAvailable) {
       for (const [event, marker] of eventMarkers) {
@@ -155,7 +158,7 @@ export function placesMap(container, city, places, labels, onSelect) {
     },
     selectEvent(event) {
       const marker = eventMarkers.get(event);
-      if (marker) { map.setView(marker.getLatLng(), 16); marker.openPopup(); }
+      if (marker) { map.setView(marker.getLatLng(), 16, { animate: !motion.matches }); marker.openPopup(); }
     },
     destroy() { resize.disconnect(); container.removeEventListener('keydown', keydown); map.remove(); message.remove(); },
   };

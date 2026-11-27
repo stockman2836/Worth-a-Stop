@@ -2,7 +2,8 @@ import { load } from 'cheerio';
 import { officialCalendars, page } from './official-calendars.mjs';
 import { eventLocation } from './event-location.mjs';
 import { readNuxtData } from './embedded-data.mjs';
-import { microdataEvents, calendarCardEvents } from './html-events.mjs';
+import { microdataEvents, calendarCardEvents, calendarRowEvents } from './html-events.mjs';
+import { calendarBase, calendarDateLinks, validCalendarDay } from './calendar-navigation.mjs';
 
 function embeddedEvents($, base) {
   const links = $('a[href]').toArray().map(anchor => linkedPage($(anchor).attr('href'), base)).filter(Boolean);
@@ -104,18 +105,20 @@ export function publishedEvents({ html, url }) {
 
 export function calendarPageLinks(document) {
   const $ = load(document.html);
-  const prefix = document.url.pathname.replace(/\/(?:categories?|kategorie(?:-podujati)?)\/.*$/, '/').replace(/\/?$/, '/');
+  const base = calendarBase(document);
+  const prefix = document.url.pathname.replace(/\/[^/]*\.[a-z\d]+$/i, '/')
+    .replace(/\/(?:categories?|kategorie(?:-podujati)?)\/.*$/, '/').replace(/\/?$/, '/');
   const next = new Set();
   const details = new Set();
   const anchors = $('main, article, [role="main"]').length ? $('main a[href], article a[href], [role="main"] a[href]') : $('a[href]');
   for (const el of $('link[rel~="next"][href], a[rel~="next"][href]').toArray()) {
-    const url = linkedPage($(el).attr('href'), document.url);
+    const url = linkedPage($(el).attr('href'), base);
     if (url) { url.hash = ''; next.add(url.href); }
   }
   for (const el of anchors.toArray()) {
     const anchor = $(el);
     if (anchor.closest('nav:not(.pagination), header, footer').length) continue;
-    const url = linkedPage(anchor.attr('href'), document.url);
+    const url = linkedPage(anchor.attr('href'), base);
     if (!url) continue;
     url.hash = '';
     if (anchor.is('.next, .next-page') || /^(next|next page|ďalšia|ďalej|další|weiter|suivant|siguiente|следующая)(?:\s*[→»›])?$/iu.test(anchor.text().trim())) {
@@ -123,6 +126,7 @@ export function calendarPageLinks(document) {
       continue;
     }
     const datedCard = anchor.find('h2,h3,h4').length && anchor.find('time[datetime], .date, [itemprop~="startDate"]').length;
+    if (/\/(?:\d{4}-\d{2}(?:-\d{2})?)(?:\.html?|\/)?$/.test(url.pathname)) continue;
     if ((!datedCard && (!url.pathname.startsWith(prefix) || url.pathname.length <= prefix.length || url.search)) ||
         /\/(?:categor(?:y|ies)|kategorie[^/]*|tag|page)\//i.test(url.pathname) ||
         /\.(?:pdf|jpe?g|png|webp|ics|zip)$/i.test(url.pathname)) continue;
@@ -131,58 +135,84 @@ export function calendarPageLinks(document) {
   return { next: [...next], details: [...details] };
 }
 
-export async function collectCalendar(calendar, { readPage = page, maxPages = 24 } = {}) {
+export async function collectCalendar(calendar, { readPage = page, maxPages = 24, day } = {}) {
+  if (day !== undefined && !validCalendarDay(day)) throw Error('Invalid calendar date');
   const queue = [{ url: calendar, index: true }];
   const seen = new Set([calendar]);
   const events = new Map();
   let pagesRead = 0, failedPages = 0, indexes = 0, limited = false;
+  let dateSearchUrl;
+  const first = day && new Date(Math.max(Date.parse('0001-01-01'), Date.parse(day) - 86400000)).toISOString().slice(0, 10);
+  const last = day && new Date(Math.min(Date.parse('9999-12-31'), Date.parse(day) + 86400000)).toISOString().slice(0, 10);
   while (queue.length && pagesRead < maxPages) {
+    queue.sort((a,b) => Number(b.index) - Number(a.index) || Number(Boolean(b.dateTarget)) - Number(Boolean(a.dateTarget)));
     const batch = queue.splice(0, Math.min(3, maxPages - pagesRead));
     pagesRead += batch.length;
+    indexes += batch.filter(job => job.index).length;
     const results = await Promise.allSettled(batch.map(async job => ({ job, document: await readPage(new URL(job.url)) })));
     for (const result of results) {
       if (result.status === 'rejected') { failedPages++; continue; }
       const { job, document } = result.value;
+      seen.add(document.url.href);
+      if (job.index && job.dateTarget && (!dateSearchUrl || document.url.href.includes(day))) dateSearchUrl = document.url.href;
       let parsed;
       try { parsed = publishedEvents(document); } catch { failedPages++; continue; }
       if (job.index) {
-        const cards = calendarCardEvents(load(document.html), document.url);
+        const $ = load(document.html), base = calendarBase(document);
+        const cards = [...calendarCardEvents($, base), ...calendarRowEvents($, base)];
         const known = new Set(parsed.map(event => event.url));
         parsed.push(...cards.filter(event => !known.has(event.url)));
       }
       for (const event of parsed) events.set(JSON.stringify([event.url, event.title, event.begin]), event);
       if (!job.index) continue;
-      indexes++;
       const links = calendarPageLinks(document);
-      for (const href of links.next) {
+      const dateLinks = day ? calendarDateLinks(document, day) : [];
+      const monthSteps = day && !dateLinks.length ? calendarDateLinks(document, day, { nearestMonth: true }) : [];
+      const indexesToRead = [];
+      for (const href of [...new Set([...dateLinks, ...monthSteps, ...links.next])]) {
         if (seen.has(href)) continue;
         seen.add(href);
-        if (indexes + queue.filter(item => item.index).length >= 4) { limited = true; continue; }
-        queue.unshift({ url: href, index: true });
+        if (indexes + queue.filter(item => item.index).length + indexesToRead.length >= 4) { limited = true; continue; }
+        indexesToRead.push({ url: href, index: true, dateTarget: dateLinks.includes(href) });
       }
+      queue.unshift(...indexesToRead);
       for (const href of links.details) {
-        if (!seen.has(href)) { seen.add(href); queue.push({ url: href, index: false }); }
+        if (day) {
+          const known = parsed.filter(event => event.url === href);
+          // Keep a one-day margin for source offsets and sessions crossing midnight.
+          if (known.length && known.every(event => event.begin?.slice(0, 10) > last ||
+            (event.end || event.begin)?.slice(0, 10) < first)) continue;
+        }
+        if (!seen.has(href)) { seen.add(href); queue.push({ url: href, index: false, dateTarget: job.dateTarget || Boolean(day && href.includes(day)) }); }
       }
     }
   }
   limited ||= queue.length > 0;
   return { events: [...events.values()], incomplete: limited || failedPages > 0 || !events.size,
-    source: { url: calendar, pagesRead, failedPages, eventsFound: events.size, limited } };
+    source: { url: calendar, pagesRead, failedPages, eventsFound: events.size, limited,
+      ...(day && { requestedDate: day }), ...(dateSearchUrl && { dateSearchUrl }) } };
 }
 
-const cache = new Map();
-export async function officialEvents(id, { refresh = false } = {}) {
-  const saved = cache.get(id);
-  if (!refresh && saved?.expires > Date.now()) return saved.promise;
-  const promise = (async () => {
-    const calendars = await officialCalendars(id, refresh ? {} : undefined);
-    const results = await Promise.allSettled(calendars.map(calendar => collectCalendar(calendar)));
-    return { events: results.flatMap(r => r.status === 'fulfilled' ? r.value.events : []),
-      sources: results.map((r, index) => r.status === 'fulfilled' ? r.value.source :
-        { url: calendars[index], pagesRead: 0, failedPages: 1, eventsFound: 0, limited: false }),
-      incomplete: !calendars.length || results.some(r => r.status === 'rejected' || r.value.incomplete) };
-  })();
-  if (cache.size >= 40) cache.delete(cache.keys().next().value);
-  cache.set(id, { expires: Date.now() + 600000, promise });
-  try { return await promise; } catch (error) { if (cache.get(id)?.promise === promise) cache.delete(id); throw error; }
+export function createOfficialEventSearch({ findCalendars = officialCalendars, readPage = page } = {}) {
+  const cache = new Map();
+  return async function search(id, { refresh = false, day } = {}) {
+    if (!/^[1-9]\d{0,9}$/.test(id)) throw Error('Invalid GeoNames ID');
+    if (day !== undefined && !validCalendarDay(day)) throw Error('Invalid calendar date');
+    const key = `${id}/${day || 'all'}`;
+    const saved = cache.get(key);
+    if (!refresh && saved?.expires > Date.now()) return saved.promise;
+    const promise = (async () => {
+      const calendars = await findCalendars(id, refresh ? {} : undefined);
+      const results = await Promise.allSettled(calendars.map(calendar => collectCalendar(calendar, { day, readPage })));
+      return { events: results.flatMap(r => r.status === 'fulfilled' ? r.value.events : []),
+        sources: results.map((r, index) => r.status === 'fulfilled' ? r.value.source :
+          { url: calendars[index], pagesRead: 0, failedPages: 1, eventsFound: 0, limited: false, ...(day && { requestedDate: day }) }),
+        incomplete: !calendars.length || results.some(r => r.status === 'rejected' || r.value.incomplete) };
+    })();
+    if (cache.size >= 40) cache.delete(cache.keys().next().value);
+    cache.set(key, { expires: Date.now() + 600000, promise });
+    try { return await promise; } catch (error) { if (cache.get(key)?.promise === promise) cache.delete(key); throw error; }
+  };
 }
+
+export const officialEvents = createOfficialEventSearch();

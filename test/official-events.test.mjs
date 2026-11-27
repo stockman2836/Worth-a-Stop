@@ -43,6 +43,8 @@ test('reads event microdata without confusing nested venue names or article publ
   assert.equal(event.title, 'Play');
   assert.equal(event.venue, 'Town Hall');
   assert.deepEqual(event.location, { latitude: 49, longitude: 20 });
+  const external = publishedEvents({ url, html: html.replace('<h1 itemprop="name">', '<a itemprop="url" href="https://organizer.example/">Website</a><h1 itemprop="name">') });
+  assert.equal(external[0].url, url.href);
   assert.equal(officialOnDay({ events: [event] }, '2026-11-28', 'Europe/Bratislava').events[0].end, Date.parse('2026-11-28T19:00Z'));
   assert.deepEqual(publishedEvents({ url, html: '<article><h1>News</h1><time datetime="2026-11-28">Today</time></article>' }), []);
   assert.deepEqual(publishedEvents({ url, html: html.replace('<h1 itemprop="name">', '<link itemprop="eventStatus" href="https://schema.org/EventCancelled"><h1 itemprop="name">') }), []);

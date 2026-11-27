@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calendarLink, calendarLinks, visitorLinks, officialCalendars } from '../src/official-calendars.mjs';
+import { calendarLink, calendarLinks, visitorLinks, venueLinks, siteCalendars, officialCalendars } from '../src/official-calendars.mjs';
 import { cityWebsites } from '../src/city-websites.mjs';
 
 const url = new URL('https://city.example/en/');
@@ -70,4 +70,35 @@ test('uses the geographic fallback when the SPARQL directory is unavailable', as
     readPage: async address => ({ url: address, html: '<a href="/events/">Events</a>' }),
   });
   assert.deepEqual(links, ['https://town.example/events/']);
+});
+
+test('discovers venue programmes through a municipal cultural directory and avoids unrelated external links', async () => {
+  const visited = [];
+  const pages = new Map([
+    ['https://town.example/', '<a href="/culture/">Culture</a><a href="https://ads.example/">Buy tickets</a>'],
+    ['https://town.example/culture/', '<a href="https://theatre.example/">Town Theatre</a><a href="https://museum.example/">Town Museum</a>'],
+    ['https://theatre.example/', '<a href="/repertoire/">Programme</a>'],
+    ['https://museum.example/', '<a href="/program/">Program</a>'],
+  ]);
+  const links = await siteCalendars(new URL('https://town.example/'), async address => {
+    visited.push(address.href);
+    assert.ok(pages.has(address.href));
+    return { url: address, html: pages.get(address.href) };
+  });
+  assert.deepEqual(links.sort(), ['https://museum.example/program/', 'https://theatre.example/repertoire/']);
+  assert.equal(visited.length, 4);
+  assert.equal(visited.includes('https://ads.example/'), false);
+  assert.deepEqual(venueLinks({ url, html: '<a href="javascript:alert(1)">Theatre</a><a href="/poster.pdf">Museum</a>' }), []);
+});
+
+test('bounds venue discovery, ignores cycles and retains city calendars after a venue failure', async () => {
+  let attempts = 0;
+  const links = await siteCalendars(new URL('https://town.example/'), async address => {
+    attempts++;
+    if (address.pathname === '/broken') throw Error('Offline');
+    return { url: address, html: '<a href="/events/">Events</a><a href="/broken">Museum</a><a href="/">Culture</a>' +
+      Array.from({ length: 5 }, (_,i) => `<a href="/culture/${attempts}-${i}">Cultural centre ${i}</a>`).join('') };
+  });
+  assert.ok(attempts <= 8);
+  assert.ok(links.includes('https://town.example/events/'));
 });

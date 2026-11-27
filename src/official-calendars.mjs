@@ -42,7 +42,7 @@ export async function page(url, redirects = 0) {
 
 export function calendarLinks({ url, html }) {
   const $ = load(html);
-  const section = /^(events?|what.s on|calendar of events|event calendar|veranstaltungen|veranstaltungskalender|akce|kalendář akcí|podujatia|kalendár podujatí|kalendarz (?:wydarzeń|imprez)|wydarzenia|események|programok|agenda|événements|eventos|eventi|evenementen|evenemang|tapahtumat|афиша|события|мероприятия|події|календар подій)(?:\s*\(\d+\))?$/iu;
+  const section = /^(events?|what.s on|calendar of events|event calendar|calendar|program|programme|programm|repertoire|repertoár|műsor|veranstaltungen|veranstaltungskalender|akce|kalendář akcí|podujatia|kalendár podujatí|kalendarz (?:wydarzeń|imprez)|wydarzenia|események|programok|agenda|événements|eventos|eventi|evenementen|evenemang|tapahtumat|афиша|события|мероприятия|программа|репертуар|події|календар подій)(?:\s*\(\d+\))?$/iu;
   const links = new Set();
   for (const a of $('a[href]').toArray()) {
     const href = $(a).attr('href');
@@ -69,6 +69,50 @@ export function visitorLinks({ url, html }) {
     if (target && target.href !== url.href) { target.hash = ''; links.add(target.href); }
   }
   return [...links].slice(0, 3);
+}
+
+export function venueLinks({ url, html }) {
+  const $ = load(html);
+  const links = new Set();
+  const institution = /theat(?:re|er)|divadl|színház|museum|museo|musée|muze[au]|múze[au]|kultur|kultúr|cultural cent(?:re|er)|culture|concert hall|концертн|театр|музе[йя]|культур/iu;
+  for (const anchor of $('a[href]').toArray()) {
+    const el = $(anchor);
+    const label = [el.text(), el.attr('title'), el.attr('aria-label'), el.find('img').attr('alt')].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    if (label.length > 180 || !institution.test(label)) continue;
+    const href = el.attr('href');
+    const target = href && URL.canParse(href, url) && website(new URL(href, url).href);
+    if (!target || /\.(?:pdf|jpe?g|png|webp|zip)$/i.test(target.pathname)) continue;
+    target.hash = '';
+    if (target.href !== url.href) links.add(target.href);
+  }
+  return [...links].slice(0, 4);
+}
+
+// Follow a short, published path from the municipality to cultural directories and venues.
+export async function siteCalendars(site, readPage = page) {
+  const queue = [{ url: site, depth: 0 }];
+  const seen = new Set([site.href]);
+  const links = new Set();
+  let attempts = 0, failed = false;
+  while (queue.length && attempts < 8) {
+    const jobs = queue.splice(0, Math.min(2, 8 - attempts));
+    attempts += jobs.length;
+    const results = await Promise.allSettled(jobs.map(async job => ({ job, document: await readPage(job.url) })));
+    for (const result of results) {
+      if (result.status === 'rejected') { failed = true; continue; }
+      const { job, document } = result.value;
+      seen.add(document.url.href);
+      for (const link of calendarLinks(document)) links.add(link);
+      if (job.depth >= 2) continue;
+      for (const href of [...visitorLinks(document), ...venueLinks(document)]) {
+        if (seen.has(href)) continue;
+        seen.add(href);
+        queue.push({ url: new URL(href), depth: job.depth + 1 });
+      }
+    }
+  }
+  if (!links.size && failed) throw Error('Linked calendars unavailable');
+  return [...links];
 }
 
 async function json(url) {
@@ -118,14 +162,15 @@ async function discoverCalendars(id, { fetchJSON = json, readPage = page } = {})
     Number(b === local) - Number(a === local) || Number(b === 'en') - Number(a === 'en')).slice(0, 3);
   const jobs = sites.map(site => Promise.resolve(site));
   for (const language of languages) jobs.push(tourismPortal(articles.get(language), language, fetchJSON));
+  const pages = new Map();
+  const sharedPage = address => {
+    if (!pages.has(address.href)) pages.set(address.href, readPage(address));
+    return pages.get(address.href);
+  };
   const results = await Promise.allSettled(jobs.map(async job => {
     const site = await job;
     if (!site) return [];
-    const home = await readPage(site);
-    const links = calendarLinks(home);
-    const visitors = await Promise.allSettled(visitorLinks(home).map(async href => calendarLinks(await readPage(new URL(href)))));
-    links.push(...visitors.flatMap(r => r.status === 'fulfilled' ? r.value : []));
-    return links;
+    return siteCalendars(site, sharedPage);
   }));
   const links = [...new Set(results.flatMap(r => r.status === 'fulfilled' ? r.value : []))].slice(0, 8);
   if (!links.length && results.some(r => r.status === 'rejected')) throw results.find(r => r.status === 'rejected').reason;

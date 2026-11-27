@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { officialCalendars } from '../src/official-calendars.mjs';
 import { officialEvents } from '../src/official-events.mjs';
+import { validCalendarDay } from '../src/calendar-navigation.mjs';
 import { nearbyPlaces } from '../src/places.mjs';
 import { createWalkingRouter } from '../src/walking-router.mjs';
 
@@ -85,8 +86,11 @@ const server = createServer(async (request, response) => {
   const lookup = /^\/api\/official-(calendars|events)\/([1-9]\d{0,9})$/.exec(request.url.split('?')[0]);
   if (lookup && request.method === 'GET') {
     try {
-      const refresh = new URL(request.url, 'http://localhost').searchParams.get('refresh') === '1';
-      const data = lookup[1] === 'events' ? await officialEvents(lookup[2], { refresh }) : await officialCalendars(lookup[2], refresh ? {} : undefined);
+      const params = new URL(request.url, 'http://localhost').searchParams;
+      const refresh = params.get('refresh') === '1';
+      const day = params.get('date') ?? undefined;
+      if (day !== undefined && !validCalendarDay(day)) { response.writeHead(400).end('Invalid calendar date'); return; }
+      const data = lookup[1] === 'events' ? await officialEvents(lookup[2], { refresh, day }) : await officialCalendars(lookup[2], refresh ? {} : undefined);
       response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=600' }).end(JSON.stringify(data));
     } catch {
       response.writeHead(502).end();

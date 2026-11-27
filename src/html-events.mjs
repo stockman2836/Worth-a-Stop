@@ -53,6 +53,27 @@ export function calendarCardEvents($, base) {
   return events;
 }
 
+// Some calendars publish a heading link and a separate year-first date/time/venue row.
+export function calendarRowEvents($, base) {
+  const events = [];
+  for (const el of $('h2 a[href], h3 a[href]').toArray()) {
+    const link = $(el), title = link.text().trim();
+    const row = link.closest('article, li, aside, .event, .event-item');
+    const fields = row.children('span, time, p').toArray().map(field => $(field).text().replace(/\s+/g, ' ').trim());
+    const stamp = fields.map(text => /^(\d{4})[./-](\d{2})[./-](\d{2})\.?\s+((?:[01]\d|2[0-3]):[0-5]\d)(?:\s*[–—-]\s*((?:[01]\d|2[0-3]):[0-5]\d))?\s*\|\s*(.+)$/.exec(text)).find(Boolean);
+    const href = link.attr('href');
+    if (!stamp || !title || !URL.canParse(href, base)) continue;
+    const url = new URL(href, base);
+    if (url.origin !== base.origin || url.username || url.password) continue;
+    const day = `${stamp[1]}-${stamp[2]}-${stamp[3]}`;
+    const begin = day + 'T' + stamp[4] + ':00';
+    const end = stamp[5] && stamp[5] > stamp[4] ? day + 'T' + stamp[5] + ':00' : undefined;
+    if (!Number.isFinite(Date.parse(begin + 'Z')) || new Date(begin + 'Z').toISOString().slice(0, 10) !== day) continue;
+    events.push({ title, url: url.href, begin, venue: stamp[6], ...(end && { end }) });
+  }
+  return events;
+}
+
 // Read only explicitly declared event properties, never article publication dates.
 export function microdataEvents($, base) {
   function property(scope, name) {
@@ -82,7 +103,7 @@ export function microdataEvents($, base) {
     const venueText = locationScope.clone();
     venueText.find('[itemscope]').remove();
     events.push({ title, begin, end: value(scope, 'endDate') || undefined,
-      url: ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? url.href : base.href,
+      url: url.origin === base.origin && !url.username && !url.password ? url.href : base.href,
       venue: value(locationScope, 'name') || venueText.text().trim() || undefined,
       ...(location && { location }) });
   }

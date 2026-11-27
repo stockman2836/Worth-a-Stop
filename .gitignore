@@ -1,5 +1,6 @@
 # Local planning
 /ROADMAP.md
+/errors.md
 
 # Node dependencies, generated output and logs
 node_modules/

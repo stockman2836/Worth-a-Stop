@@ -1,6 +1,7 @@
 import { overpassQuery } from './overpass.mjs';
 import { cityBoundary } from './city-boundary.mjs';
 import { validExtent } from './overpass-coverage.mjs';
+import { prominenceSignals, classifyProminence } from './place-prominence.mjs';
 
 const categories = {
   tourism: ['attraction', 'museum', 'viewpoint', 'gallery'],
@@ -8,9 +9,8 @@ const categories = {
   building: ['cathedral', 'basilica', 'church', 'temple', 'monastery'], leisure: ['park', 'garden'], amenity: ['marketplace'],
 };
 
-function importance(tags) {
+function importance(tags, translations) {
   const landmark = categories.building.includes(tags.building) || tags.tourism === 'attraction' || categories.historic.includes(tags.historic);
-  const translations = Object.keys(tags).filter(key => /^name:[a-z]{2,3}(?:-[a-z\d]+)*$/i.test(key) && tags[key]).length;
   // Source annotations indicate prominence without a hand-maintained list of famous sites.
   return (landmark ? 3 : tags.tourism === 'museum' ? 2 : 0) + Math.log2(1 + translations) * 6 +
     (tags.wikidata ? 2 : 0) + (tags.wikipedia ? 3 : 0) + (tags.heritage ? 3 : 0) +
@@ -66,8 +66,11 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
       type !== 'node' || tags.marketplace || tags.market || tags.wikidata || tags.building === 'marketplace'
     ))) continue;
     const km = distance(latitude, longitude, point.lat, point.lon);
-    if (boundary || km <= 2) places.push({ latitude: point.lat, longitude: point.lon, name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
-      rank: importance(tags),
+    if (!boundary && km > 2) continue;
+    const signals = prominenceSignals(tags);
+    places.push({ latitude: point.lat, longitude: point.lon, name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
+      rank: importance(tags, signals.languages),
+      signals,
       identity: tags.wikidata,
       url: `https://www.openstreetmap.org/${type}/${id}` });
   }
@@ -83,6 +86,6 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
     if (place.identity) identities.add(place.identity);
     if (!boundary && unique.length === 12) break;
   }
-  const result = unique.map(({ rank, identity, ...place }) => place);
+  const result = classifyProminence(unique);
   return boundary ? { places: result, boundary: { name: boundary.name, url: boundary.url } } : result;
 }

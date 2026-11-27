@@ -1,6 +1,7 @@
 import * as L from './leaflet.mjs';
 import { markerFace, placeGroup, placeSymbols } from './map-symbols.mjs';
 import { discoveryIndex } from './discovery-index.mjs';
+import { detailZoom, initialHighlights } from './discovery-visibility.mjs';
 
 export function placesMap(container, city, places, labels, onSelect, view) {
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -28,6 +29,8 @@ export function placesMap(container, city, places, labels, onSelect, view) {
   let events = [], eventItems = [], states = [], eventStates = new Map(), onlyAvailable = false;
   let index = discoveryIndex([]), focused, focusMarker, clearingFocus = false, clusterPopup;
   let pending = false, destroyed = false, fitted = Boolean(restored);
+  let showEvents = false;
+  let indexTier = -1;
   const stateFor = item => item.kind === 'place' ? states[item.index] : eventStates.get(events[item.index]);
   const nameFor = item => item.kind === 'place' ? labels.name(item) : item.title;
   const visibleItem = item => !onlyAvailable || (item.kind === 'place' ? stateFor(item)?.state === 'open' : stateFor(item)?.available);
@@ -50,6 +53,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     if (!element) return;
     const group = item.kind === 'place' ? placeGroup(item.category) : 'event';
     element.dataset.group = group; element.dataset.state = stateFor(item)?.state || 'unknown';
+    element.dataset.prominence = item.prominence || '';
     const category = item.kind === 'place' ? labels[item.category] || labels[placeSymbols[group].label] : labels.legendEvents;
     element.title = [nameFor(item), category, item.mapLabel, stateFor(item)?.label].filter(Boolean).join(' · ');
     element.setAttribute('aria-label', element.title);
@@ -57,8 +61,11 @@ export function placesMap(container, city, places, labels, onSelect, view) {
   function markerFor(item, focus = false) {
     const place = item.kind === 'place';
     const symbol = place ? placeSymbols[placeGroup(item.category)].icon : 'calendar-days';
-    const icon = L.divIcon({ className: place ? 'place-marker' : 'event-marker', html: markerFace(symbol), iconSize: [34, 34], iconAnchor: [17, 17] });
-    const marker = L.marker([item.latitude, item.longitude], { icon, title: nameFor(item), riseOnHover: true, zIndexOffset: focus ? 1000 : 0 });
+    const highlight = place && item.prominence === 'highlight';
+    const size = focus || !place ? 30 : highlight ? 28 : item.prominence === 'local' ? 20 : 24;
+    const className = (place ? 'place-marker' + (highlight ? ' highlight-marker' : '') : 'event-marker') + (focus ? ' focused-marker' : '');
+    const icon = L.divIcon({ className, html: markerFace(symbol), iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
+    const marker = L.marker([item.latitude, item.longitude], { icon, title: nameFor(item), riseOnHover: true, zIndexOffset: focus ? 2000 : highlight ? 800 : 0 });
     marker.on('add', () => decorate(marker, item));
     if (focus) {
       marker.bindPopup(popupContent(item));
@@ -98,6 +105,18 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     if (destroyed) return;
     discoveryLayer.clearLayers();
     const bounds = map.getBounds();
+    const labelsUsed = [];
+    for (const item of placeItems.filter(item => item.prominence === 'highlight' && visibleItem(item) && item.key !== focused?.key && bounds.contains([item.latitude, item.longitude]))) {
+      const marker = markerFor(item).addTo(discoveryLayer);
+      const point = map.latLngToContainerPoint([item.latitude, item.longitude]);
+      const width = Math.min(160, nameFor(item).length * 6.5 + 16);
+      const box = { left: point.x - width / 2, right: point.x + width / 2, top: point.y - 39, bottom: point.y - 17 };
+      if (!labelsUsed.some(other => box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top)) {
+        labelsUsed.push(box);
+        marker.bindTooltip(nameFor(item), { permanent: true, direction: 'top', offset: [0, -13], className: 'landmark-label', interactive: true });
+        marker.getTooltip().on('click', () => selectItem(item));
+      }
+    }
     for (const feature of index.visible([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()], Math.floor(map.getZoom()))) {
       if (!feature.properties.cluster) { markerFor(index.item(feature)).addTo(discoveryLayer); continue; }
       const properties = feature.properties, point = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
@@ -126,7 +145,9 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     if (destroyed) return;
     clusterPopup?.remove(); clusterPopup = undefined;
     if (focused && !visibleItem(focused)) clearFocus(false);
-    const items = [...placeItems, ...eventItems].filter(item => visibleItem(item) && item.key !== focused?.key);
+    indexTier = map.getZoom() >= 17 ? 2 : map.getZoom() >= 15 ? 1 : 0;
+    const items = [...placeItems.filter(item => item.prominence !== 'highlight' && map.getZoom() >= detailZoom(item)),
+      ...(showEvents ? eventItems : [])].filter(item => visibleItem(item) && item.key !== focused?.key);
     index = discoveryIndex(items); renderDiscovery();
     if (focusMarker) { focusMarker.setPopupContent(popupContent(focused)); decorate(focusMarker, focused); }
   }
@@ -139,8 +160,12 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     fitted = true;
     map.fitBounds(L.latLngBounds(items.map(item => [item.latitude, item.longitude])), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
   }
-  map.on('moveend', renderDiscovery);
-  fitInitial(placeItems); refresh();
+  function moved() {
+    const tier = map.getZoom() >= 17 ? 2 : map.getZoom() >= 15 ? 1 : 0;
+    if (tier !== indexTier) rebuild(); else renderDiscovery();
+  }
+  map.on('moveend', moved);
+  fitInitial(initialHighlights(placeItems)); refresh();
   const resize = new ResizeObserver(() => map.invalidateSize({ pan: false }));
   resize.observe(container);
   const routeLayer = L.layerGroup().addTo(map);
@@ -169,6 +194,11 @@ export function placesMap(container, city, places, labels, onSelect, view) {
   container.addEventListener('keydown', keydown);
   return {
     view() { const centre = map.getCenter().wrap(); return { latitude: centre.lat, longitude: centre.lng, zoom: map.getZoom() }; },
+    setEventsVisible(value) {
+      showEvents = Boolean(value);
+      if (!showEvents && focused?.kind === 'event') clearFocus(false);
+      refresh();
+    },
     pickStart(pick, cancel) { picker = { pick, cancel }; container.classList.add('picking-start'); container.focus(); },
     cancelStart() { picker = undefined; container.classList.remove('picking-start'); },
     setOrigin(point, title) {
@@ -177,7 +207,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
       const content = document.createElement('span');
       content.textContent = title;
       const icon = L.divIcon({ className: 'origin-marker', html: markerFace('flag'), iconSize: [34, 34], iconAnchor: [17, 17] });
-      L.marker([point.latitude, point.longitude], { icon, title, alt: title }).bindPopup(content).addTo(originLayer);
+      L.marker([point.latitude, point.longitude], { icon, title, alt: title, zIndexOffset: 2500 }).bindPopup(content).addTo(originLayer);
     },
     clearPreview() { previewLayer.clearLayers(); },
     previewPlan(legs, stops) {
@@ -199,7 +229,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
         const label = origin ? markerFace('flag') : String(++number);
         const icon = L.divIcon({ className: origin ? 'origin-marker draft-stop' : 'route-stop draft-stop', html: label,
           iconSize: origin ? [34, 34] : [28, 28], iconAnchor: origin ? [17, 17] : [14, 14] });
-        L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title }).bindPopup(content).addTo(previewLayer);
+        L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title, zIndexOffset: 1800 }).bindPopup(content).addTo(previewLayer);
       }
       if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
     },
@@ -232,7 +262,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
         popup.textContent = stop.title;
         const offset = stops[0]?.type === 'origin' ? 1 : 0;
         const icon = L.divIcon({ className: 'route-stop', html: String(index + 1 - offset), iconSize: [28, 28], iconAnchor: [14, 14] });
-        L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title })
+        L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title, zIndexOffset: 1500 })
           .bindPopup(popup).addTo(routeLayer);
       }
       const points = legs.filter(leg => leg.status === 'ok').flatMap(leg => leg.geometry.coordinates.map(([lon, lat]) => [lat, lon]));
@@ -247,7 +277,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
       if (focused?.kind === 'event') clearFocus(false);
       events = value;
       eventItems = events.flatMap((event, index) => event.location ? [{ ...event, kind: 'event', key: 'e:' + index, index, ...event.location }] : []);
-      fitInitial(eventItems); refresh();
+      refresh();
     },
     setEventStates(value, availableOnly) {
       eventStates = value; onlyAvailable = availableOnly; refresh();
@@ -255,6 +285,6 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     selectEvent(event) {
       selectItem(eventItems.find(item => events[item.index] === event));
     },
-    destroy() { destroyed = true; resize.disconnect(); map.off('moveend', renderDiscovery); container.removeEventListener('keydown', keydown); map.remove(); message.remove(); },
+    destroy() { destroyed = true; resize.disconnect(); map.off('moveend', moved); container.removeEventListener('keydown', keydown); map.remove(); message.remove(); },
   };
 }

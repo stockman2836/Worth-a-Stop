@@ -86,7 +86,7 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   const previewTitle = document.createElement('summary');
   previewTitle.textContent = text.preview;
   preview.append(previewTitle, ...Object.values(places.previewElements));
-  map.append(mapHeader, places.mapElements.canvas, places.mapElements.picker, preview, places.mapElements.legend, places.mapElements.credit);
+  map.append(mapHeader, places.mapElements.controls, places.mapElements.canvas, places.mapElements.picker, preview, places.mapElements.legend, places.mapElements.credit);
 
   const discovery = document.createElement('section');
   discovery.className = 'discovery';

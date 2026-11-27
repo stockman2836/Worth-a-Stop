@@ -13,6 +13,7 @@ const assets = new Map([
   ['/icons.mjs', ['../web/icons.mjs', 'text/javascript']],
   ['/map-symbols.mjs', ['../web/map-symbols.mjs', 'text/javascript']],
   ['/discovery-index.mjs', ['../src/discovery-index.mjs', 'text/javascript']],
+  ['/discovery-visibility.mjs', ['../src/discovery-visibility.mjs', 'text/javascript']],
   ['/supercluster.mjs', ['../node_modules/supercluster/index.js', 'text/javascript']],
   ['/kdbush.mjs', ['../node_modules/kdbush/index.js', 'text/javascript']],
   ['/supercluster.LICENSE.txt', ['../node_modules/supercluster/LICENSE', 'text/plain']],

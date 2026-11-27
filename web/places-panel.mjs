@@ -11,6 +11,11 @@ const copy = {
   ru: { title: 'Места города', loading: 'Ищем границу города и интересные места…', empty: 'В границах города подходящих мест не найдено.',
     scope: 'Места по всему городу', boundary: 'Граница поиска', boundaryError: 'Не удалось подтвердить границу выбранного города. Поиск по всему городу недоступен.', sourceError: 'Источники мест временно недоступны. Попробуйте снова через минуту.', error: 'Не удалось загрузить места.', retry: 'Попробовать снова',
     pages: 'Страницы мест', previous: 'Назад', next: 'Дальше', pageRange: (first, last, total) => `Показаны ${first}–${last} из ${total}`,
+    placeSelection: 'В списке', highlights: 'Главное', allPlaces: 'Все места',
+    noHighlights: 'В источнике недостаточно признаков значимости для главной подборки. Остальные места доступны во вкладке «Все места».',
+    noOpenHighlights: 'Среди главных мест нет подтверждённо открытых сейчас. Отключите фильтр доступности или откройте все места.',
+    prominenceReasons: { documented: 'Есть справочные ссылки', multilingual: 'Название на нескольких языках', heritage: 'Охранный статус', international: 'Отмечено международное значение' },
+    mapGuide: 'Главные места показаны сразу. Дополнительные появляются при приближении.', mapEvents: 'События на карте',
     clusterCount: (places, events) => `Места: ${places}, события: ${events}. Приблизьте карту или выберите объект в группе.`,
     clusterKinds: (places, events) => [places && `М:${places}`, events && `С:${events}`].filter(Boolean).join(' · '),
     clusterMore: 'Показать ещё', legendCluster: 'Группа: М — места, С — события',
@@ -32,6 +37,11 @@ const copy = {
   en: { title: 'City places', loading: 'Looking for the city boundary and places…', empty: 'No matching places within the city boundary.',
     scope: 'Places across the city', boundary: 'Search boundary', boundaryError: 'Could not confirm the selected city boundary. Citywide search is unavailable.', sourceError: 'Place sources are temporarily unavailable. Try again in a minute.', error: 'Could not load places.', retry: 'Try again',
     pages: 'Place pages', previous: 'Previous', next: 'Next', pageRange: (first, last, total) => `Showing ${first}–${last} of ${total}`,
+    placeSelection: 'In the list', highlights: 'Highlights', allPlaces: 'All places',
+    noHighlights: 'The source lacks enough prominence annotations for a highlights selection. Other places remain available under All places.',
+    noOpenHighlights: 'No highlights are verified open now. Turn off the availability filter or explore all places.',
+    prominenceReasons: { documented: 'Reference links available', multilingual: 'Named in several languages', heritage: 'Heritage designation', international: 'Marked as internationally significant' },
+    mapGuide: 'Highlights are shown immediately. More places appear as you zoom in.', mapEvents: 'Events on the map',
     clusterCount: (places, events) => `Places: ${places}, events: ${events}. Zoom in or choose an item in the group.`,
     clusterKinds: (places, events) => [places && `P:${places}`, events && `E:${events}`].filter(Boolean).join(' · '),
     clusterMore: 'Show more', legendCluster: 'Group: P — places, E — events',
@@ -61,7 +71,7 @@ export function placesPanel(city, language, signal, open, selection) {
   summary.setAttribute('aria-label', text.title + ' · ' + city.name);
   const status = document.createElement('p');
   status.setAttribute('role', 'status');
-  const listView = placeList(language, text, () => itinerary, index => { route.focused = false; map?.select(index); }, selection?.placePage);
+  const listView = placeList(language, text, () => itinerary, index => { route.focused = false; map?.select(index); }, selection?.placePage, selection?.allPlaces);
   const list = listView.element;
   const mapBox = document.createElement('div');
   mapBox.className = 'places-map';
@@ -96,6 +106,12 @@ export function placesPanel(city, language, signal, open, selection) {
   let itinerary;
   let onTimeChange;
   let loadedPlaces = [];
+  const mapControls = document.createElement('div'); mapControls.className = 'map-discovery-controls';
+  const guide = document.createElement('p'); guide.textContent = text.mapGuide;
+  const eventToggle = document.createElement('input'); eventToggle.type = 'checkbox'; eventToggle.checked = selection?.mapEvents ?? false;
+  const eventLabel = document.createElement('label'); eventLabel.append(eventToggle, document.createTextNode(text.mapEvents));
+  eventToggle.addEventListener('change', () => map?.setEventsVisible(eventToggle.checked));
+  mapControls.append(guide, eventLabel);
   const zone = city.timezone || 'UTC';
   const controls = document.createElement('div');
   controls.className = 'day-controls place-time-controls';
@@ -178,6 +194,7 @@ export function placesPanel(city, language, signal, open, selection) {
     mapBox.hidden = false;
     map = placesMap(mapBox, city, [], { ...text, name: place => place.names[language] || place.name }, () => {}, selection?.mapView);
     map.setEvents(events);
+    map.setEventsVisible(eventToggle.checked);
     map.setRoute(route.legs, route.stops, route.focused);
     configureOrigin();
     updateHours();
@@ -205,7 +222,7 @@ export function placesPanel(city, language, signal, open, selection) {
   iconLabel(cancelPick, 'x', text.cancelPick);
   cancelPick.addEventListener('click', cancelStartSelection);
   pickerBox.append(pickHint, cancelPick);
-  details.append(summary, controls, slider, filterLabel, filterMessage, status, retry, mapBox, pickerBox, legend, list, listView.pagination, credit);
+  details.append(summary, controls, slider, filterLabel, filterMessage, status, retry, mapControls, mapBox, pickerBox, legend, listView.filters, listView.empty, list, listView.pagination, credit);
   async function load() {
     retry.hidden = true;
     status.textContent = text.loading;
@@ -222,6 +239,7 @@ export function placesPanel(city, language, signal, open, selection) {
       }
       map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name }, select, view);
       map.setEvents(events);
+      map.setEventsVisible(eventToggle.checked);
       map.setRoute(route.legs, route.stops, route.focused);
       configureOrigin();
       loadedPlaces = places;
@@ -252,9 +270,9 @@ export function placesPanel(city, language, signal, open, selection) {
   updateHours();
   return {
     element: details,
-    mapElements: { canvas: mapBox, picker: pickerBox, legend, credit },
+    mapElements: { controls: mapControls, canvas: mapBox, picker: pickerBox, legend, credit },
     previewElements: { controls, slider, filter: filterLabel, message: filterMessage },
-    selection() { return { date: day.value, time: clock.value, available: filter.checked, placePage: listView.getPage(), mapView: map?.view() || selection?.mapView }; },
+    selection() { return { date: day.value, time: clock.value, available: filter.checked, placePage: listView.getPage(), allPlaces: listView.showsAll(), mapEvents: eventToggle.checked, mapView: map?.view() || selection?.mapView }; },
     setTime(value) { clock.value = value; updateHours(); },
     setDay,
     getDay() { return day.value; },

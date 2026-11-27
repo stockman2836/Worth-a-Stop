@@ -18,6 +18,8 @@
   --success: #33734a;
   --warning: #935a2a;
   --warning-bg: #fff1e0;
+  --danger: #ad413b;
+  --danger-hover: #8b302b;
   --unknown: #8d793e;
   --focus: #699843;
   --shadow-tint: #263c1f08;
@@ -28,6 +30,8 @@
   background: var(--bg);
 }
 :root[data-theme="dark"] {
+  --danger: #c84e45;
+  --danger-hover: #b4433b;
   color-scheme: dark;
   --bg: #111c18;
   --surface: #1a2821;
@@ -339,6 +343,19 @@ main { width: min(74rem, calc(100% - 4rem)); }
 .trip-form .day-picker { font-size: .75rem; }
 .change-city { border-radius: 2rem; padding: .65rem 1.1rem; font-size: .8rem; }
 .change-city::before { content: '↗'; margin-right: .5rem; color: var(--warm); }
+.workspace-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: .65rem; }
+.reset-city { background: var(--surface); color: var(--secondary); border: 1px solid var(--line-strong); border-radius: 2rem; padding: .65rem 1.1rem; font-size: .8rem; }
+.reset-city:hover { background: var(--warning-bg); color: var(--warning); }
+.city-reset-dialog { width: min(36rem, calc(100% - 2rem)); box-sizing: border-box; padding: 2rem; border: 1px solid var(--line-strong); border-radius: 1.25rem; color: var(--ink); background: var(--surface); box-shadow: var(--panel-shadow); }
+.city-reset-dialog::backdrop { background: #09170db3; }
+.city-reset-dialog h2 { margin-top: 0; font-size: 1.5rem; }
+.city-reset-dialog p { color: var(--secondary); line-height: 1.6; }
+.city-reset-dialog .reset-city-error { color: var(--danger); }
+.reset-city-error:empty, .city-reset-status:empty { display: none; }
+.city-reset-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .75rem; margin-top: 1.5rem; }
+.city-reset-actions .confirm-city-reset { background: var(--danger); color: #fff; border-color: var(--danger); }
+.city-reset-actions .confirm-city-reset:hover { background: var(--danger-hover); }
+.city-reset-status { color: var(--success); }
 .map-heading { margin: .2rem .3rem 1.1rem; }
 .map-heading h2 { display: flex; align-items: center; gap: .6rem; font-size: .95rem; }
 .map-heading h2::before { content: ''; width: .4rem; height: .4rem; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }

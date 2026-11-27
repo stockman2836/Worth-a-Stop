@@ -1,7 +1,6 @@
 import { eventLocation } from './event-location.mjs';
 import { nextDate } from './day-agenda.mjs';
-
-const unsaved = new Map();
+import { originMemory as unsaved } from './city-plan-state.mjs';
 
 export function withStartingPoint(stops, point, title) {
   if (!point || !stops.length) return stops;

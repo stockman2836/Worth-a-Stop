@@ -2,6 +2,7 @@ import { placesPanel } from './places-panel.mjs';
 import { calendarsPanel } from './calendar-panel.mjs';
 import { itineraryPanel } from './itinerary-panel.mjs';
 import { autoPlanPanel } from './auto-plan-panel.mjs';
+import { cityReset } from './city-reset.mjs';
 
 const copy = {
   ru: { eyebrow: 'ТВОЙ ДЕНЬ В ГОРОДЕ', change: 'Сменить город', trip: 'Когда гуляем?',
@@ -16,7 +17,7 @@ const copy = {
     date: 'Date', hint: 'Your plan is saved on this device. Times use the time zone shown above.' },
 };
 
-export function cityWorkspace(city, language, calendarCopy, storage, signal, selection, onChangeCity) {
+export function cityWorkspace(city, language, calendarCopy, storage, signal, selection, onChangeCity, onReset) {
   const text = copy[language];
   const element = document.createElement('section');
   element.className = 'city-workspace';
@@ -37,7 +38,10 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   change.className = 'change-city';
   change.textContent = text.change;
   change.addEventListener('click', onChangeCity);
-  heading.append(identity, change);
+  const headingActions = document.createElement('div'); headingActions.className = 'workspace-actions';
+  const reset = cityReset(city, language, storage, signal, onReset);
+  headingActions.append(change, reset.button);
+  heading.append(identity, headingActions);
 
   const places = placesPanel(city, language, signal, true, selection);
   const itinerary = itineraryPanel(city, language, places, storage, signal, () => {
@@ -141,7 +145,8 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   const footnote = document.createElement('p');
   footnote.className = 'workspace-note';
   footnote.textContent = text.hint;
-  element.append(heading, trip, grid, footnote);
+  const resetStatus = document.createElement('p'); resetStatus.className = 'city-reset-status'; resetStatus.setAttribute('role', 'status');
+  element.append(heading, resetStatus, trip, grid, footnote, reset.dialog);
   const startInput = itinerary.controls.start.querySelector('input');
   const syncPreview = () => { if (startInput.value) places.setTime(startInput.value); };
   startInput.addEventListener('change', syncPreview);
@@ -149,6 +154,7 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   if (!selection?.time) syncPreview();
   return {
     element,
+    announceReset(message) { resetStatus.textContent = message; },
     selection() { return { ...places.selection(), tab: panels[1].hidden ? 'places' : 'events', pace: autoPlan.getPace() }; },
   };
 }

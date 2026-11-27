@@ -121,7 +121,10 @@ function openCity(city, selection) {
   cancelSearch();
   workspaceController?.abort();
   workspaceController = new AbortController();
-  const view = cityWorkspace(city, language, copy[language], storage, workspaceController.signal, selection, closeCity);
+  const view = cityWorkspace(city, language, copy[language], storage, workspaceController.signal, selection, closeCity, message => {
+    openCity(city);
+    activeWorkspace.view.announceReset(message);
+  });
   activeWorkspace = { city, view };
   input.value = submittedQuery = city.name;
   selectedCountry = city.countryCode;

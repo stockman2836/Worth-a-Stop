@@ -1,7 +1,6 @@
 import { nextDate } from './day-agenda.mjs';
 import { eventLocation } from './event-location.mjs';
-
-const memory = new Map();
+import { itineraryMemory as memory } from './city-plan-state.mjs';
 
 export function itineraryStop(item, type) {
   const title = item.title || item.name;

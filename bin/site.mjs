@@ -24,6 +24,8 @@ const assets = new Map([
   ['/plan-candidates.mjs', ['../src/plan-candidates.mjs', 'text/javascript']],
   ['/auto-plan-panel.mjs', ['../web/auto-plan-panel.mjs', 'text/javascript']],
   ['/city-workspace.mjs', ['../web/city-workspace.mjs', 'text/javascript']],
+  ['/city-reset.mjs', ['../web/city-reset.mjs', 'text/javascript']],
+  ['/city-plan-state.mjs', ['../src/city-plan-state.mjs', 'text/javascript']],
   ['/starting-point.mjs', ['../src/starting-point.mjs', 'text/javascript']],
   ['/alternatives.mjs', ['../src/alternatives.mjs', 'text/javascript']],
   ['/alternatives-panel.mjs', ['../web/alternatives-panel.mjs', 'text/javascript']],

@@ -7,8 +7,7 @@ import { alternativesPanel } from './alternatives-panel.mjs';
 import { orderPanel } from './order-panel.mjs';
 import { startingPointStore, withStartingPoint } from './starting-point.mjs';
 import { checkTripWindow } from './trip-window.mjs';
-
-const unsavedTimes = new Map();
+import { timeMemory as unsavedTimes } from './city-plan-state.mjs';
 
 const copy = {
   ru: { title: 'План дня', date: 'Дата плана', add: 'Добавить в план', empty: 'Добавьте места и события из подборки.',

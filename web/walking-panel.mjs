@@ -1,4 +1,5 @@
 import { walkingLegs } from './walking-legs.mjs';
+import { iconLabel } from './icons.mjs';
 
 const copy = {
   ru: { title: 'Пешие переходы', need: 'Добавьте места или события для расчёта переходов.',
@@ -24,7 +25,7 @@ export function walkingPanel(language, timeline, signal, onRoutes = () => {}) {
   const list = document.createElement('ol');
   const show = document.createElement('button');
   show.type = 'button';
-  show.textContent = text.map;
+  iconLabel(show, 'route', text.map);
   show.addEventListener('click', () => timeline.showRoute());
   const retry = document.createElement('button');
   retry.type = 'button';

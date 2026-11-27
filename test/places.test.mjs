@@ -32,11 +32,15 @@ test('rejects an uncorroborated marketplace tag, prioritizes the cathedral and m
     { ...node, id: 21, tags: { name: 'Cathedral', tourism: 'attraction', building: 'cathedral', wikidata: 'Q1' } },
     { ...node, id: 22, tags: { name: 'Cathedral', building: 'cathedral', wikidata: 'Q1' } },
     { type: 'way', id: 23, center: { lat: 0, lon: .01 }, tags: { name: 'Market', amenity: 'marketplace' } },
+    { ...node, id: 24, tags: { name: 'Basilica', tourism: 'attraction', building: 'basilica' } },
+    { ...node, id: 25, tags: { name: 'Church museum', tourism: 'museum', building: 'church' } },
   ]);
   assert.equal(places.some(place => place.name === 'Faxcopy'), false);
   assert.equal(places[0].category, 'cathedral');
   assert.equal(places.filter(place => place.name === 'Cathedral').length, 1);
   assert.ok(places.some(place => place.category === 'marketplace'));
+  assert.equal(places.find(place => place.name === 'Basilica').category, 'basilica');
+  assert.equal(places.find(place => place.name === 'Church museum').category, 'museum');
 });
 
 test('distinguishes an empty area from an incomplete Overpass response', async () => {

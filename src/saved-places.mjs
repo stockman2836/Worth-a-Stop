@@ -23,7 +23,7 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
     if (validResult(data) && Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now()) saved = data;
   } catch { /* Storage is optional. */ }
   try {
-    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '5' });
+    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '6' });
     if (scope === 'city') { query.set('id', city.id); query.set('name', city.name); }
     const response = await fetchResponse('/api/places?' + query, { signal });
     if (response.status === 422) throw Object.assign(Error('City boundary unavailable'), { code: 'CITY_BOUNDARY_UNAVAILABLE' });

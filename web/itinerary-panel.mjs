@@ -8,6 +8,7 @@ import { orderPanel } from './order-panel.mjs';
 import { startingPointStore, withStartingPoint } from './starting-point.mjs';
 import { checkTripWindow } from './trip-window.mjs';
 import { timeMemory as unsavedTimes } from './city-plan-state.mjs';
+import { icon, iconLabel } from './icons.mjs';
 
 const copy = {
   ru: { title: 'План дня', date: 'Дата плана', add: 'Добавить в план', empty: 'Добавьте места и события из подборки.',
@@ -134,7 +135,8 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
   emptyTitle.textContent = text.begin;
   const emptyHint = document.createElement('p');
   emptyHint.textContent = text.beginHint;
-  emptyState.append(emptyTitle, emptyHint);
+  const emptyIcon = document.createElement('div'); emptyIcon.className = 'empty-plan-icon'; emptyIcon.append(icon('route'));
+  emptyState.append(emptyIcon, emptyTitle, emptyHint);
   if (onExplore) emptyState.append(button(text.explore, onExplore));
   const originControls = document.createElement('div');
   originControls.className = 'itinerary-actions origin-controls';
@@ -147,6 +149,8 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
   });
   chooseOrigin.className = 'choose-origin';
   const resetOrigin = button(text.resetOrigin, () => { points.set(activeDay, null); render(); });
+  iconLabel(chooseOrigin, 'map-pin', text.pickOrigin);
+  iconLabel(resetOrigin, 'flag', text.resetOrigin);
   resetOrigin.className = 'reset-origin';
   const originStatus = document.createElement('p');
   originStatus.className = 'origin-status';
@@ -331,10 +335,14 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
       const actions = document.createElement('div');
       actions.className = 'itinerary-actions';
       const up = button(text.up, () => render(store.move(activeDay, stop.id, -1)));
+      iconLabel(up, 'arrow-up', text.up);
       up.disabled = index === 0;
       const down = button(text.down, () => render(store.move(activeDay, stop.id, 1)));
+      iconLabel(down, 'arrow-down', text.down);
       down.disabled = index === result.stops.length - 1;
-      actions.append(up, down, button(text.remove, () => render(store.remove(activeDay, stop.id))));
+      const remove = button(text.remove, () => render(store.remove(activeDay, stop.id)));
+      iconLabel(remove, 'trash-2', text.remove);
+      actions.append(up, down, remove);
       item.append(actions);
       list.append(item);
     }
@@ -384,6 +392,8 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
         render(store.add(activeDay, stop), exists ? text.duplicate : text.added);
       });
       add.className = 'add-to-plan';
+      iconLabel(add, 'plus', text.add);
+      add.prepend(icon('check'));
       add.setAttribute('aria-label', text.add + ' · ' + (item.title || item.names?.[language] || item.name));
       return add;
     },

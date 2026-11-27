@@ -3,6 +3,7 @@ import { calendarsPanel } from './calendar-panel.mjs';
 import { itineraryPanel } from './itinerary-panel.mjs';
 import { autoPlanPanel } from './auto-plan-panel.mjs';
 import { cityReset } from './city-reset.mjs';
+import { iconLabel } from './icons.mjs';
 
 const copy = {
   ru: { eyebrow: 'ТВОЙ ДЕНЬ В ГОРОДЕ', change: 'Сменить город', trip: 'Когда гуляем?',
@@ -36,7 +37,7 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   const change = document.createElement('button');
   change.type = 'button';
   change.className = 'change-city';
-  change.textContent = text.change;
+  iconLabel(change, 'arrow-left', text.change);
   change.addEventListener('click', onChangeCity);
   const headingActions = document.createElement('div'); headingActions.className = 'workspace-actions';
   const reset = cityReset(city, language, storage, signal, onReset);
@@ -107,7 +108,7 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
     const tab = document.createElement('button');
     tab.type = 'button';
     tab.id = `city-${city.id}-tab-${index}`;
-    tab.textContent = label;
+    iconLabel(tab, index === 0 ? 'map-pin' : 'calendar-days', label);
     tab.setAttribute('role', 'tab');
     tab.setAttribute('aria-controls', `city-${city.id}-panel-${index}`);
     tab.addEventListener('click', () => selectTab(index));

@@ -2,6 +2,7 @@ import { generateDayPlan } from './auto-plan.mjs';
 import { loadPlanCandidates } from './plan-candidates.mjs';
 import { localInstant } from './opening-hours.mjs';
 import { withStartingPoint } from './starting-point.mjs';
+import { iconLabel } from './icons.mjs';
 
 const copy = {
   ru: { pace: 'Темп прогулки', paces: { relaxed: 'Спокойный', balanced: 'Обычный', active: 'Насыщенный' },
@@ -58,8 +59,8 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
   try { saved = storage?.getItem(preference); } catch { /* Optional preference. */ }
   pace.value = Object.hasOwn(text.paces, initialPace || saved) ? initialPace || saved : 'balanced';
   paceLabel.append(text.pace, pace);
-  const run = document.createElement('button'); run.type = 'button'; run.className = 'generate-day'; run.textContent = text.generate;
-  const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = text.cancel; cancel.hidden = true;
+  const run = document.createElement('button'); run.type = 'button'; run.className = 'generate-day'; iconLabel(run, 'sparkles', text.generate);
+  const cancel = document.createElement('button'); cancel.type = 'button'; iconLabel(cancel, 'x', text.cancel); cancel.hidden = true;
   controls.append(paceLabel, run, cancel);
   const element = document.createElement('section'); element.className = 'auto-plan-preview'; element.hidden = true;
   const heading = document.createElement('h2'); heading.textContent = text.title;
@@ -78,7 +79,7 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
   function clear() {
     active?.abort(); active = undefined; proposal = expected = signature = undefined;
     timeline.clearDraft(); list.replaceChildren(); actions.hidden = true; note.textContent = ''; mapHint.hidden = true;
-    message.removeAttribute('aria-busy'); run.disabled = false; run.textContent = text.generate; cancel.hidden = true;
+    message.removeAttribute('aria-busy'); run.disabled = false; iconLabel(run, 'sparkles', text.generate); cancel.hidden = true;
   }
   function invalidate() {
     if (!signature || fingerprint() === signature) return;
@@ -134,8 +135,8 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
           entry.variety && entry.stop.type === 'place' && text.variety].filter(Boolean).join(' · ');
         item.append(time, link, reason); list.append(item);
       }
-      actions.hidden = false; apply.textContent = context.stops.length ? text.replace : text.apply;
-      run.textContent = text.again;
+      actions.hidden = false; iconLabel(apply, 'check', context.stops.length ? text.replace : text.apply);
+      iconLabel(run, 'sparkles', text.again);
     } catch (error) {
       if (active !== controller || signal.aborted) return;
       message.textContent = error.name === 'TimeoutError' ? text.timeout : text.error;

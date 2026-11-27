@@ -3,6 +3,8 @@ import { placesMap } from './places-map.mjs';
 import { openingState, localClock, localInstant } from './opening-hours.mjs';
 import { eventState } from './event-state.mjs';
 import { todayIn } from './day-agenda.mjs';
+import { iconLabel } from './icons.mjs';
+import { placeGroup, placeSymbols, updateLegend } from './map-symbols.mjs';
 
 const copy = {
   ru: { title: 'Места города', loading: 'Ищем границу города и интересные места…', empty: 'В границах города подходящих мест не найдено.',
@@ -14,7 +16,9 @@ const copy = {
     park: 'Парк', garden: 'Сад', marketplace: 'Рынок', map: 'Карта мест',
     zoomIn: 'Приблизить', zoomOut: 'Отдалить', unknown: 'Часы работы не указаны',
     tilesError: 'Не удалось загрузить часть карты.', saved: 'Источник недоступен. Показана сохранённая подборка от',
-    source: 'Открыть в OpenStreetMap', legend: 'Круги — места · ромбы — события выбранного дня',
+    source: 'Открыть в OpenStreetMap', legend: 'Условные обозначения карты',
+    legendMuseums: 'Музеи', legendArt: 'Галереи', legendHistoric: 'Исторические места', legendWorship: 'Храмы',
+    legendNature: 'Парки и сады', legendEvents: 'События выбранного дня', legendRoute: 'Номер остановки в маршруте',
     date: 'Дата проверки', time: 'Местное время', open: 'Открыто', closed: 'Закрыто', uncertain: 'Время работы неизвестно',
     origin: 'Точка старта', pickHint: 'Нажмите на карту для выбора старта. С клавиатуры перемещайте карту стрелками и нажмите Enter. Escape отменяет выбор.', cancelPick: 'Отменить выбор старта',
     timeline: 'Время на карте', available: 'Доступно сейчас', ongoing: 'Идёт', soon: 'Начнётся в течение часа',
@@ -29,7 +33,9 @@ const copy = {
     park: 'Park', garden: 'Garden', marketplace: 'Market', map: 'Map of places',
     zoomIn: 'Zoom in', zoomOut: 'Zoom out', unknown: 'Opening hours unspecified',
     tilesError: 'Some map tiles could not be loaded.', saved: 'Source unavailable. Showing places saved on',
-    source: 'Open in OpenStreetMap', legend: 'Circles — places · diamonds — events for the selected day',
+    source: 'Open in OpenStreetMap', legend: 'Map legend',
+    legendMuseums: 'Museums', legendArt: 'Galleries', legendHistoric: 'Historic places', legendWorship: 'Places of worship',
+    legendNature: 'Parks and gardens', legendEvents: 'Events on the selected day', legendRoute: 'Stop number in your route',
     date: 'Check date', time: 'Local time', open: 'Open', closed: 'Closed', uncertain: 'Opening hours unknown',
     origin: 'Starting point', pickHint: 'Click the map to choose a start. With the keyboard, pan using arrow keys and press Enter. Escape cancels.', cancelPick: 'Cancel start selection',
     timeline: 'Map time', available: 'Available now', ongoing: 'Ongoing', soon: 'Starts within an hour',
@@ -183,8 +189,8 @@ export function placesPanel(city, language, signal, open, selection) {
   retry.textContent = text.retry;
   retry.type = 'button';
   retry.hidden = true;
-  const legend = document.createElement('p');
-  legend.textContent = text.legend;
+  const legend = document.createElement('ul'); legend.className = 'map-legend';
+  updateLegend(legend, [], text);
   const pickerBox = document.createElement('div');
   pickerBox.className = 'start-picker';
   pickerBox.hidden = true;
@@ -192,7 +198,7 @@ export function placesPanel(city, language, signal, open, selection) {
   pickHint.textContent = text.pickHint;
   const cancelPick = document.createElement('button');
   cancelPick.type = 'button';
-  cancelPick.textContent = text.cancelPick;
+  iconLabel(cancelPick, 'x', text.cancelPick);
   cancelPick.addEventListener('click', cancelStartSelection);
   pickerBox.append(pickHint, cancelPick);
   details.append(summary, controls, slider, filterLabel, filterMessage, status, retry, mapBox, pickerBox, legend, list, credit);
@@ -237,11 +243,13 @@ export function placesPanel(city, language, signal, open, selection) {
         badge.className = 'opening-state';
         const category = document.createElement('span');
         category.className = 'place-category';
-        category.textContent = text[place.category] || place.category;
+        category.dataset.group = placeGroup(place.category);
+        iconLabel(category, placeSymbols[placeGroup(place.category)].icon, text[place.category] || place.category);
         item.append(category, show, badge, info, link, itinerary.button(place, 'place'));
         list.append(item);
       }
       loadedPlaces = places;
+      updateLegend(legend, places, text);
       updateHours();
       if (selectedEvent && events.includes(selectedEvent)) map.selectEvent(selectedEvent);
       if (alternative) map.previewPlace(alternative);

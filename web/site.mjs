@@ -1,6 +1,7 @@
 import { suggestCities } from './cities.mjs';
 import { featuredCities } from './sources.mjs';
 import { cityWorkspace } from './city-workspace.mjs';
+import { iconLabel } from './icons.mjs';
 
 const copy = {
   ru: {
@@ -79,7 +80,7 @@ function renderLanguage() {
   document.querySelector('#intro-lead').textContent = text.lead;
   document.querySelector('#tagline').textContent = text.tagline;
   document.querySelector('#query-label').textContent = text.label;
-  document.querySelector('#submit').textContent = text.search;
+  iconLabel(document.querySelector('#submit'), 'search', text.search);
   document.querySelector('#attribution').textContent = text.attribution;
   document.querySelector('#languages').setAttribute('aria-label', text.language);
   input.placeholder = text.placeholder;

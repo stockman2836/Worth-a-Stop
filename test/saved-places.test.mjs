@@ -47,7 +47,7 @@ test('city and local searches use separate versioned cache entries and the corre
   assert.equal(calls[0].searchParams.get('scope'), 'city');
   assert.equal(calls[0].searchParams.get('id'), '42');
   assert.equal(calls[0].searchParams.get('name'), 'Town');
-  assert.equal(calls[0].searchParams.get('v'), '5');
+  assert.equal(calls[0].searchParams.get('v'), '6');
   assert.equal(calls[0].searchParams.has('radius'), false);
   await assert.rejects(loadPlaces(city, { storage: saved, scope: 'nearby', fetchResponse: unavailable }));
   await loadPlaces(city, { storage: saved, scope: 'nearby', fetchResponse });

@@ -1,4 +1,5 @@
 import { resetCityPlans } from './city-plan-state.mjs';
+import { iconLabel } from './icons.mjs';
 
 const copy = {
   ru: { button: 'Сбросить планы города', title: name => `Сбросить планы: ${name}?`,
@@ -20,7 +21,7 @@ const copy = {
 export function cityReset(city, language, storage, signal, onReset) {
   const text = copy[language];
   const button = document.createElement('button');
-  button.type = 'button'; button.className = 'reset-city'; button.textContent = text.button;
+  button.type = 'button'; button.className = 'reset-city'; iconLabel(button, 'undo-2', text.button);
   button.setAttribute('aria-haspopup', 'dialog');
   const dialog = document.createElement('dialog'); dialog.className = 'city-reset-dialog';
   const title = document.createElement('h2'); title.id = `reset-city-${city.id}-title`; title.textContent = text.title(city.name);
@@ -30,7 +31,7 @@ export function cityReset(city, language, storage, signal, onReset) {
   const error = document.createElement('p'); error.className = 'reset-city-error'; error.setAttribute('role', 'alert');
   const actions = document.createElement('div'); actions.className = 'city-reset-actions';
   const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = text.cancel; cancel.autofocus = true;
-  const confirm = document.createElement('button'); confirm.type = 'button'; confirm.className = 'confirm-city-reset'; confirm.textContent = text.confirm;
+  const confirm = document.createElement('button'); confirm.type = 'button'; confirm.className = 'confirm-city-reset'; iconLabel(confirm, 'trash-2', text.confirm);
   actions.append(cancel, confirm); dialog.append(title, description, keep, error, actions);
   button.addEventListener('click', () => { error.textContent = ''; dialog.showModal(); });
   cancel.addEventListener('click', () => dialog.close());

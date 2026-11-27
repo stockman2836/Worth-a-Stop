@@ -58,7 +58,7 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
   for (const { type, id, lat, lon, center, tags = {} } of elements) {
     const point = center ?? { lat, lon };
     if (!validPoint(point.lat, point.lon) || !['node', 'way', 'relation'].includes(type) || !Number.isSafeInteger(id)) continue;
-    const key = tags.building === 'cathedral' ? 'building' :
+    const key = tags.building === 'cathedral' || tags.tourism === 'attraction' && categories.building.includes(tags.building) ? 'building' :
       categories.historic.includes(tags.historic) ? 'historic' : Object.keys(categories).find(k => categories[k].includes(tags[k]));
     const name = tags.name;
     if (!key || !name || ['private', 'no'].includes(tags.access) || tags.opening_hours === 'off') continue;

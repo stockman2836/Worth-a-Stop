@@ -1,4 +1,5 @@
 import { findDayEvents, mergeListings, officialOnDay, nextDate, todayIn } from './day-agenda.mjs';
+import { iconLabel } from './icons.mjs';
 
 const copy = {
   ru: {
@@ -98,7 +99,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
         const show = document.createElement('button');
         show.type = 'button';
         show.className = 'show-event';
-        show.textContent = text.showMap;
+        iconLabel(show, 'map-pin', text.showMap);
         show.addEventListener('click', () => eventMap.selectEvent(event));
         info.append(show);
       } else {

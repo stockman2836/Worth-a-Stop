@@ -5,8 +5,8 @@ import { eventState } from './event-state.mjs';
 import { todayIn } from './day-agenda.mjs';
 
 const copy = {
-  ru: { title: 'Места города', loading: 'Ищем места…', empty: 'В радиусе 6 км подходящих мест не найдено.',
-    scope: 'Главные места и окрестности · до 6 км от центра по прямой', error: 'Не удалось загрузить места.', retry: 'Попробовать снова',
+  ru: { title: 'Места города', loading: 'Ищем границу города и интересные места…', empty: 'В границах города подходящих мест не найдено.',
+    scope: 'Подборка по всему городу · до 24 мест', boundary: 'Граница поиска', boundaryError: 'Не удалось подтвердить границу выбранного города. Поиск по всему городу недоступен.', error: 'Не удалось загрузить места.', retry: 'Попробовать снова',
     hours: 'Часы работы', museum: 'Музей', gallery: 'Галерея', viewpoint: 'Смотровая площадка',
     attraction: 'Достопримечательность', castle: 'Замок', monument: 'Памятник', ruins: 'Руины',
     archaeological_site: 'Археологический памятник', city_gate: 'Городские ворота', cathedral: 'Собор',
@@ -20,8 +20,8 @@ const copy = {
     timeline: 'Время на карте', available: 'Доступно сейчас', ongoing: 'Идёт', soon: 'Начнётся в течение часа',
     upcoming: 'Позже', ended: 'Завершилось', eventUnknown: 'Время события неизвестно',
     filtered: (places, events) => `Доступно мест — ${places}, событий — ${events}. Неизвестное расписание скрыто.` },
-  en: { title: 'City places', loading: 'Looking for places…', empty: 'No matching places within 6 km.',
-    scope: 'Landmarks and nearby places · within 6 km of the centre, straight-line distance', error: 'Could not load places.', retry: 'Try again',
+  en: { title: 'City places', loading: 'Looking for the city boundary and places…', empty: 'No matching places within the city boundary.',
+    scope: 'Citywide shortlist · up to 24 places', boundary: 'Search boundary', boundaryError: 'Could not confirm the selected city boundary. Citywide search is unavailable.', error: 'Could not load places.', retry: 'Try again',
     hours: 'Opening hours', museum: 'Museum', gallery: 'Gallery', viewpoint: 'Viewpoint',
     attraction: 'Attraction', castle: 'Castle', monument: 'Monument', ruins: 'Ruins',
     archaeological_site: 'Archaeological site', city_gate: 'City gate', cathedral: 'Cathedral',
@@ -202,7 +202,7 @@ export function placesPanel(city, language, signal, open, selection) {
     retry.hidden = true;
     status.textContent = text.loading;
     try {
-      const { places, stale, checkedAt } = await loadPlaces(city, { signal, storage });
+      const { places, boundary, stale, checkedAt } = await loadPlaces(city, { signal, storage });
       if (signal.aborted) return;
       map?.destroy();
       map = undefined;
@@ -248,10 +248,14 @@ export function placesPanel(city, language, signal, open, selection) {
       if (draft) map.previewPlan(draft.legs, draft.stops);
       const date = new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(checkedAt);
       status.textContent = [places.length ? text.scope : text.empty, stale && text.saved + ' ' + date].filter(Boolean).join(' · ');
+      const boundaryLink = document.createElement('a');
+      boundaryLink.href = boundary.url;
+      boundaryLink.textContent = `${text.boundary}: ${boundary.name}`;
+      status.append(' · ', boundaryLink);
       retry.hidden = !stale;
-    } catch {
+    } catch (error) {
       if (signal.aborted) return;
-      status.textContent = text.error;
+      status.textContent = error.code === 'CITY_BOUNDARY_UNAVAILABLE' ? text.boundaryError : text.error;
       retry.hidden = false;
     }
   }

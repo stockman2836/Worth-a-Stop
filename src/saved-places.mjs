@@ -7,23 +7,32 @@ function validPlaces(places, limit) {
     /^https:\/\/www\.openstreetmap\.org\/(node|way|relation)\/\d+$/.test(place.url));
 }
 
-export async function loadPlaces(city, { signal, fetchResponse = fetch, storage, radiusKm = 6 } = {}) {
-  if (![2, 6].includes(radiusKm)) throw Error('Invalid place search radius');
-  const limit = radiusKm === 6 ? 24 : 12;
-  const key = `worth-a-stop.places.v3.${radiusKm}.${city.latitude}.${city.longitude}`;
+function validBoundary(boundary) {
+  return typeof boundary?.name === 'string' && boundary.name.trim() &&
+    /^https:\/\/www\.openstreetmap\.org\/relation\/[1-9]\d*$/.test(boundary.url);
+}
+
+export async function loadPlaces(city, { signal, fetchResponse = fetch, storage, scope = 'city' } = {}) {
+  if (!['city', 'nearby'].includes(scope)) throw Error('Invalid place search scope');
+  const limit = scope === 'city' ? 24 : 12;
+  const key = `worth-a-stop.places.v4.${scope}.${scope === 'city' ? city.id + '.' : ''}${city.latitude}.${city.longitude}`;
+  const validResult = result => validPlaces(result?.places, limit) && (scope !== 'city' || validBoundary(result.boundary));
   let saved;
   try {
     const data = JSON.parse(storage?.getItem(key) ?? 'null');
-    if (data && validPlaces(data.places, limit) && Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now()) saved = data;
+    if (validResult(data) && Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now()) saved = data;
   } catch { /* Storage is optional. */ }
   try {
-    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, radius: radiusKm, v: '4' });
+    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '5' });
+    if (scope === 'city') { query.set('id', city.id); query.set('name', city.name); }
     const response = await fetchResponse('/api/places?' + query, { signal });
+    if (response.status === 422) throw Object.assign(Error('City boundary unavailable'), { code: 'CITY_BOUNDARY_UNAVAILABLE' });
     if (!response.ok) throw Error('Places unavailable');
-    const places = await response.json();
-    if (!validPlaces(places, limit)) throw Error('Invalid places response');
+    const payload = await response.json();
+    const data = scope === 'city' ? payload : { places: payload };
+    if (!validResult(data)) throw Error('Invalid places response');
     signal?.throwIfAborted();
-    const result = { places, checkedAt: Date.now() };
+    const result = { places: data.places, ...(scope === 'city' && { boundary: data.boundary }), checkedAt: Date.now() };
     try { storage?.setItem(key, JSON.stringify(result)); } catch { /* Live results remain usable. */ }
     return { ...result, stale: false };
   } catch (error) {

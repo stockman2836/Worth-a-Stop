@@ -104,11 +104,14 @@ test('validates local time windows before making requests, including DST ambigui
 test('loads the selected date, keeps surviving sources and labels stale place suggestions', async () => {
   const storage = new Map();
   const local = { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) };
-  const city = { id: 123, latitude: 47.5, longitude: 19, timezone: input.timeZone };
+  const city = { id: 123, name: 'Town', latitude: 47.5, longitude: 19, timezone: input.timeZone };
   const calls = [];
   const fetchResponse = async url => {
     calls.push(String(url));
-    if (String(url).startsWith('/api/places?')) return Response.json([place(1)]);
+    if (String(url).startsWith('/api/places?')) {
+      assert.equal(new URL(url, 'https://app.example').searchParams.get('scope'), 'city');
+      return Response.json({ places: [place(1)], boundary: { name: 'Town', url: 'https://www.openstreetmap.org/relation/42' } });
+    }
     if (String(url).startsWith('/api/official-events/')) return Response.json({ events: [{ title: 'Concert', url: 'https://events.example/concert', begin: day + 'T10:00', end: day + 'T11:00' }] });
     return new Response(null, { status: 502 });
   };

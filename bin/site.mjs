@@ -67,25 +67,29 @@ const server = createServer(async (request, response) => {
     const params = new URLSearchParams(request.url.slice('/api/places?'.length));
     const latitude = Number(params.get('lat'));
     const longitude = Number(params.get('lon'));
-    const radiusKm = Number(params.get('radius') ?? 2);
+    const scope = params.get('scope') ?? 'nearby';
+    const id = Number(params.get('id'));
+    const name = params.get('name')?.trim();
     if (!params.get('lat')?.trim() || !params.get('lon')?.trim() || !Number.isFinite(latitude) || Math.abs(latitude) > 90 ||
-        !Number.isFinite(longitude) || Math.abs(longitude) > 180 || ![2, 6].includes(radiusKm)) {
+        !Number.isFinite(longitude) || Math.abs(longitude) > 180 || !['city', 'nearby'].includes(scope) ||
+        params.has('radius') && params.get('radius') !== '2' ||
+        scope === 'city' && (!Number.isSafeInteger(id) || id < 1 || !name || name.length > 200)) {
       response.writeHead(400).end();
       return;
     }
-    const key = [radiusKm, latitude, longitude].join('/');
+    const key = [scope, scope === 'city' ? id : '', latitude, longitude, scope === 'city' ? name : ''].join('/');
     let entry = placesCache.get(key);
     if (!entry || entry.expires < Date.now()) {
       if (placesCache.size >= 100) placesCache.delete(placesCache.keys().next().value);
-      entry = { promise: nearbyPlaces({ latitude, longitude }, { radiusKm }), expires: Date.now() + 3600000 };
+      entry = { promise: nearbyPlaces({ latitude, longitude, id, name }, { scope }), expires: Date.now() + 3600000 };
       placesCache.set(key, entry);
     }
     try {
       const places = await entry.promise;
       response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, max-age=3600' }).end(JSON.stringify(places));
-    } catch {
+    } catch (error) {
       if (placesCache.get(key) === entry) placesCache.delete(key);
-      response.writeHead(502).end();
+      response.writeHead(error.code === 'CITY_BOUNDARY_UNAVAILABLE' ? 422 : 502).end();
     }
     return;
   }

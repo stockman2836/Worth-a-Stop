@@ -15,7 +15,7 @@ export async function findAlternatives(stops, id, legs, start, timeZone, { signa
   if (!Number.isInteger(original.duration) || original.duration < 1) return { reason: 'duration', alternatives: [] };
   const baseline = arrivalTimes(stops, legs, start);
   if (baseline[index].arrival === null) return { reason: 'arrival', alternatives: [] };
-  const { places, stale } = await loadPlaces(original.location, { signal, fetchResponse, storage, radiusKm: 2 });
+  const { places, stale } = await loadPlaces(original.location, { signal, fetchResponse, storage, scope: 'nearby' });
   const used = new Set(stops.map(stop => stop.url));
   const candidates = places.filter(place => !used.has(place.url) &&
     visitOpeningState(place.hours, baseline[index].arrival, baseline[index].departure, timeZone).state === 'fits')

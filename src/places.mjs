@@ -1,3 +1,6 @@
+import { overpassQuery } from './overpass.mjs';
+import { cityBoundary, boundaryUnavailable } from './city-boundary.mjs';
+
 const categories = {
   tourism: ['attraction', 'museum', 'viewpoint', 'gallery'],
   historic: ['castle', 'monument', 'ruins', 'archaeological_site', 'city_gate', 'amphitheatre', 'fort', 'palace', 'church', 'temple', 'monastery'],
@@ -25,10 +28,11 @@ function distance(lat, lon, otherLat, otherLon) {
   return 12742 * Math.asin(Math.sqrt(Math.min(1, a)));
 }
 
-export async function nearbyPlaces(city, { signal, fetchResponse = fetch, radiusKm = 2 } = {}) {
+export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope = 'nearby' } = {}) {
   const { latitude, longitude } = city;
   if (!validPoint(latitude, longitude)) throw Error('Invalid city centre');
-  if (![2, 6].includes(radiusKm)) throw Error('Invalid place search radius');
+  if (!['city', 'nearby'].includes(scope)) throw Error('Invalid place search scope');
+  const boundary = scope === 'city' ? await cityBoundary(city, { signal, fetchResponse }) : null;
   function bounds(radius) {
     const dy = radius / 110.5;
     const dx = dy / Math.cos(latitude * Math.PI / 180);
@@ -37,27 +41,10 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, radius
       : `around:${radius * 1000},${latitude},${longitude}`;
   }
   const filters = Object.entries(categories).map(([tag, values]) =>
-    `nwr[${tag}~"^(${values.join('|')})$"][name](${bounds(2)});`);
-  if (radiusKm > 2) for (const tag of ['wikidata', 'wikipedia', 'heritage']) filters.push(`nwr[name][${tag}](${bounds(radiusKm)});`);
-  async function query(endpoint, post = false) {
-    const url = new URL(endpoint);
-    const data = `[out:json][timeout:12];(${filters.join('')});out tags center;`;
-    if (!post) url.searchParams.set('data', data);
-    const timeout = AbortSignal.timeout(18000);
-    const response = await fetchResponse(url, { signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-      headers: { 'User-Agent': 'Worth-a-Stop/0.1 (city travel planner)', ...(post && { 'Content-Type': 'application/x-www-form-urlencoded' }) },
-      ...(post && { method: 'POST', body: new URLSearchParams({ data }).toString() }) });
-    if (!response.ok) throw Error('Place search unavailable');
-    const { elements, remark } = await response.json();
-    if (remark || !Array.isArray(elements)) throw Error('Incomplete place search');
-    return elements;
-  }
-  let elements;
-  const endpoints = ['https://maps.mail.ru/osm/tools/overpass/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
-  for (const [index, endpoint] of endpoints.entries()) {
-    try { elements = await query(endpoint, index === 2); break; }
-    catch (error) { signal?.throwIfAborted(); if (index === endpoints.length - 1) throw error; }
-  }
+    `nwr[${tag}~"^(${values.join('|')})$"][name](${boundary ? 'area.city' : bounds(2)});`);
+  const elements = await overpassQuery(`${boundary ? `rel(${boundary.relation});map_to_area->.city;.city out tags;` : ''}(${filters.join('')});out tags center;`, { signal, fetchResponse });
+  // A missing Overpass area is not evidence that a city has no attractions.
+  if (boundary && !elements.some(element => element.type === 'area')) throw boundaryUnavailable();
   const places = [];
   for (const { type, id, lat, lon, center, tags = {} } of elements) {
     const point = center ?? { lat, lon };
@@ -70,7 +57,7 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, radius
       type !== 'node' || tags.marketplace || tags.market || tags.wikidata || tags.building === 'marketplace'
     ))) continue;
     const km = distance(latitude, longitude, point.lat, point.lon);
-    if (km <= radiusKm && (km <= 2 || tags.wikidata || tags.wikipedia || tags.heritage)) places.push({ latitude: point.lat, longitude: point.lon, name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
+    if (boundary || km <= 2) places.push({ latitude: point.lat, longitude: point.lon, name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
       rank: importance(tags),
       identity: tags.wikidata,
       url: `https://www.openstreetmap.org/${type}/${id}` });
@@ -85,5 +72,6 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, radius
     if (!duplicate) unique.push(place);
   }
   // Category quotas must not displace better documented landmarks.
-  return unique.slice(0, radiusKm === 6 ? 24 : 12).map(({ rank, identity, ...place }) => place);
+  const shortlist = unique.slice(0, boundary ? 24 : 12).map(({ rank, identity, ...place }) => place);
+  return boundary ? { places: shortlist, boundary: { name: boundary.name, url: boundary.url } } : shortlist;
 }

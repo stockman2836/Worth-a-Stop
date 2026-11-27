@@ -95,29 +95,47 @@ test('city discovery includes documented landmarks beyond the local radius witho
   const ordinary = Array.from({ length: 30 }, (_,index) => ({ type: 'node', id: index + 100, lat: 41.892, lon: 12.512 + index / 100000,
     tags: { name: 'Local cathedral ' + index, building: 'cathedral' } }));
   const other = { type: 'node', id: 999, lat: 41.9, lon: 12.53, tags: { name: 'Local market', amenity: 'marketplace', market: 'yes' } };
-  const centre = { latitude: 41.89193, longitude: 12.51133 };
+  const centre = { id: 3169070, name: 'Rome', latitude: 41.89193, longitude: 12.51133 };
   let requested;
-  const fetchResponse = async url => { requested = url.searchParams.get('data'); return Response.json({ elements: [...ordinary, other, ...landmarks] }); };
-  const places = await nearbyPlaces(centre, { radiusKm: 6, fetchResponse });
+  const fetchResponse = async url => {
+    requested = url.searchParams.get('data');
+    if (requested.includes('is_in')) return Response.json({ elements: [{ type: 'relation', id: 41485, tags: { name: 'Roma', 'name:en': 'Rome', boundary: 'administrative', admin_level: '8', 'geonames:id': '3169070' } }] });
+    return Response.json({ elements: [{ type: 'area', id: 3600041485 }, ...ordinary, other, ...landmarks] });
+  };
+  const { places, boundary } = await nearbyPlaces(centre, { scope: 'city', fetchResponse });
   assert.equal(places.length, 24);
   assert.deepEqual(new Set(places.slice(0, 3).map(place => place.name)), new Set(landmarks.map(place => place.tags.name)));
   assert.ok(places.find(place => place.name === 'Pantheon').km > 2);
   assert.ok(places.find(place => place.name === 'Basilica di San Pietro').km > 4);
-  assert.ok(requested.includes('[wikidata]'));
+  assert.ok(requested.includes('rel(41485);map_to_area->.city;'));
+  assert.ok(requested.includes('(area.city)'));
+  assert.equal(boundary.url, 'https://www.openstreetmap.org/relation/41485');
   assert.ok(!requested.includes('Colosseo') && !requested.includes('Q10285'));
-  const local = await nearbyPlaces(centre, { radiusKm: 2, fetchResponse });
+  const local = await nearbyPlaces(centre, { scope: 'nearby', fetchResponse });
   assert.equal(local.length, 12);
   assert.equal(local.some(place => place.name === 'Pantheon'), false);
 });
 
-test('wide discovery rejects non-attractions, undocumented distant places and points outside the circle', async () => {
+test('city discovery includes distant places without wiki annotations and rejects non-attractions', async () => {
   const samples = [
     { ...node, id: 1, lat: .03, tags: { name: 'Distant park', leisure: 'park' } },
     { ...node, id: 2, lat: .03, tags: { name: 'Metro station', railway: 'station', wikidata: 'Q1', wikipedia: 'en:Station' } },
-    { ...node, id: 3, lat: .05, lon: .05, tags: { name: 'Outside circle', tourism: 'attraction', wikidata: 'Q2' } },
+    { ...node, id: 3, lat: .2, lon: .2, tags: { name: 'Remote attraction', tourism: 'attraction' } },
     { ...node, id: 4, lat: .03, tags: { name: 'Temple', building: 'temple', wikidata: 'Q3' } },
   ];
-  const places = await nearbyPlaces(city, { radiusKm: 6, fetchResponse: async () => Response.json({ elements: samples }) });
-  assert.deepEqual(places.map(place => place.name), ['Temple']);
-  await assert.rejects(nearbyPlaces(city, { radiusKm: 500 }), /radius/);
+  let query;
+  const { places } = await nearbyPlaces({ ...city, id: 1, name: 'Town' }, { scope: 'city', fetchResponse: async url => {
+    query = url.searchParams.get('data');
+    return Response.json({ elements: query.includes('is_in') ? [{ type: 'relation', id: 10, tags: { name: 'Town', boundary: 'administrative', admin_level: '8' } }] : [{ type: 'area', id: 3600000010 }, ...samples] });
+  } });
+  assert.deepEqual(new Set(places.map(place => place.name)), new Set(['Temple', 'Distant park', 'Remote attraction']));
+  assert.ok(places.some(place => place.km > 6));
+  assert.ok(!query.includes('around:') && !query.includes('[wikidata]'));
+  await assert.rejects(nearbyPlaces(city, { scope: 'world' }), /scope/);
+});
+
+test('a missing generated area is unavailable rather than an empty city shortlist', async () => {
+  const fetchResponse = async url => Response.json({ elements: url.searchParams.get('data').includes('is_in') ?
+    [{ type: 'relation', id: 10, tags: { name: 'Town', boundary: 'administrative', admin_level: '8' } }] : [] });
+  await assert.rejects(nearbyPlaces({ ...city, id: 1, name: 'Town' }, { scope: 'city', fetchResponse }), { code: 'CITY_BOUNDARY_UNAVAILABLE' });
 });

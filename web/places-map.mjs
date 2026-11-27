@@ -1,12 +1,15 @@
 import * as L from './leaflet.mjs';
 import { markerFace, placeGroup, placeSymbols } from './map-symbols.mjs';
+import { discoveryIndex } from './discovery-index.mjs';
 
-export function placesMap(container, city, places, labels, onSelect) {
+export function placesMap(container, city, places, labels, onSelect, view) {
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  const restored = view && Number.isFinite(view.latitude) && Math.abs(view.latitude) <= 90 &&
+    Number.isFinite(view.longitude) && Math.abs(view.longitude) <= 180 && Number.isFinite(view.zoom) && view.zoom >= 0 && view.zoom <= 19 ? view : undefined;
   // Leaflet 1.9 can complete a zoom after a replaced map has already been removed.
   const map = L.map(container, { scrollWheelZoom: true, zoomControl: false, zoomAnimation: false,
     fadeAnimation: !motion.matches, markerZoomAnimation: !motion.matches })
-    .setView([city.latitude, city.longitude], 14);
+    .setView([restored?.latitude ?? city.latitude, restored?.longitude ?? city.longitude], restored?.zoom ?? 14);
   L.control.zoom({ zoomInTitle: labels.zoomIn, zoomOutTitle: labels.zoomOut }).addTo(map);
   const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -19,30 +22,127 @@ export function placesMap(container, city, places, labels, onSelect) {
   tiles.on('loading', () => { tileFailed = false; });
   tiles.on('tileerror', () => { tileFailed = true; message.textContent = labels.tilesError; });
   tiles.on('load', () => { if (!tileFailed) message.textContent = ''; });
-  const markers = places.map((place, index) => {
+  const discoveryLayer = L.layerGroup().addTo(map);
+  const focusLayer = L.layerGroup().addTo(map);
+  const placeItems = places.map((place, index) => ({ ...place, kind: 'place', key: 'p:' + index, index }));
+  let events = [], eventItems = [], states = [], eventStates = new Map(), onlyAvailable = false;
+  let index = discoveryIndex([]), focused, focusMarker, clearingFocus = false, clusterPopup;
+  let pending = false, destroyed = false, fitted = Boolean(restored);
+  const stateFor = item => item.kind === 'place' ? states[item.index] : eventStates.get(events[item.index]);
+  const nameFor = item => item.kind === 'place' ? labels.name(item) : item.title;
+  const visibleItem = item => !onlyAvailable || (item.kind === 'place' ? stateFor(item)?.state === 'open' : stateFor(item)?.available);
+  function popupContent(item) {
     const popup = document.createElement('div');
     const title = document.createElement('a');
-    title.href = place.url;
-    title.textContent = labels.name(place);
+    title.href = item.url; title.textContent = nameFor(item);
     const hours = document.createElement('p');
-    hours.textContent = place.hours ? labels.hours + ' · ' + place.hours : labels.unknown;
+    hours.textContent = item.kind === 'place' ? item.hours ? labels.hours + ' · ' + item.hours : labels.unknown :
+      [item.mapLabel, item.venue].filter(Boolean).join(' · ');
     const state = document.createElement('p');
-    state.className = 'opening-state';
+    state.className = item.kind === 'place' ? 'opening-state' : 'event-state';
+    state.textContent = stateFor(item)?.label || '';
+    state.dataset.state = stateFor(item)?.state || 'unknown';
     popup.append(title, state, hours);
-    const group = placeGroup(place.category);
-    const titleText = `${labels.name(place)} · ${labels[place.category] || labels[placeSymbols[group].label]}`;
-    const icon = L.divIcon({ className: 'place-marker', html: markerFace(placeSymbols[group].icon), iconSize: [34, 34], iconAnchor: [17, 17] });
-    const marker = L.marker([place.latitude, place.longitude], { icon, title: titleText, alt: titleText, riseOnHover: true })
-      .addTo(map).bindPopup(popup);
-    marker.getElement().dataset.group = group;
-    marker.on('popupopen', () => onSelect(index));
+    return popup;
+  }
+  function decorate(marker, item) {
+    const element = marker.getElement();
+    if (!element) return;
+    const group = item.kind === 'place' ? placeGroup(item.category) : 'event';
+    element.dataset.group = group; element.dataset.state = stateFor(item)?.state || 'unknown';
+    const category = item.kind === 'place' ? labels[item.category] || labels[placeSymbols[group].label] : labels.legendEvents;
+    element.title = [nameFor(item), category, item.mapLabel, stateFor(item)?.label].filter(Boolean).join(' · ');
+    element.setAttribute('aria-label', element.title);
+  }
+  function markerFor(item, focus = false) {
+    const place = item.kind === 'place';
+    const symbol = place ? placeSymbols[placeGroup(item.category)].icon : 'calendar-days';
+    const icon = L.divIcon({ className: place ? 'place-marker' : 'event-marker', html: markerFace(symbol), iconSize: [34, 34], iconAnchor: [17, 17] });
+    const marker = L.marker([item.latitude, item.longitude], { icon, title: nameFor(item), riseOnHover: true, zIndexOffset: focus ? 1000 : 0 });
+    marker.on('add', () => decorate(marker, item));
+    if (focus) {
+      marker.bindPopup(popupContent(item));
+      if (place) marker.on('popupopen', () => onSelect(item.index));
+    } else marker.on('click', () => selectItem(item));
     return marker;
-  });
-  if (markers.length) map.fitBounds(L.latLngBounds(markers.map(marker => marker.getLatLng())), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
+  }
+  function clearFocus(refresh = true) {
+    clearingFocus = true; focused = focusMarker = undefined; focusLayer.clearLayers(); clearingFocus = false;
+    if (refresh) rebuild();
+  }
+  function selectItem(item) {
+    if (!item || !visibleItem(item)) return;
+    clearFocus(false); focused = item; rebuild();
+    map.setView([item.latitude, item.longitude], Math.max(17, map.getZoom()), { animate: !motion.matches });
+    focusMarker = markerFor(item, true).addTo(focusLayer);
+    focusMarker.on('popupclose', () => { if (!clearingFocus) clearFocus(); });
+    focusMarker.openPopup();
+  }
+  function clusterContents(feature) {
+    const snapshot = index, count = feature.properties.point_count;
+    const content = document.createElement('div'); content.className = 'cluster-contents';
+    const title = document.createElement('strong'); title.textContent = labels.clusterCount(feature.properties.places, feature.properties.events);
+    const list = document.createElement('ul'); const more = document.createElement('button'); more.type = 'button'; more.textContent = labels.clusterMore;
+    let offset = 0;
+    function append() {
+      for (const item of snapshot.members(feature.properties.cluster_id, offset)) {
+        const row = document.createElement('li'), choose = document.createElement('button'); choose.type = 'button';
+        choose.textContent = [nameFor(item), item.mapLabel, item.venue].filter(Boolean).join(' · ');
+        choose.addEventListener('click', () => selectItem(item)); row.append(choose); list.append(row); offset++;
+      }
+      more.hidden = offset >= count;
+    }
+    more.addEventListener('click', append); content.append(title, list, more); append(); return content;
+  }
+  function renderDiscovery() {
+    if (destroyed) return;
+    discoveryLayer.clearLayers();
+    const bounds = map.getBounds();
+    for (const feature of index.visible([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()], Math.floor(map.getZoom()))) {
+      if (!feature.properties.cluster) { markerFor(index.item(feature)).addTo(discoveryLayer); continue; }
+      const properties = feature.properties, point = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
+      const face = document.createElement('span'); face.className = 'cluster-face';
+      const count = document.createElement('strong'); count.textContent = String(properties.point_count_abbreviated ?? properties.point_count);
+      const kinds = document.createElement('small'); kinds.textContent = labels.clusterKinds(properties.places, properties.events);
+      face.append(count, kinds);
+      const icon = L.divIcon({ className: 'map-cluster', html: face, iconSize: [48, 48], iconAnchor: [24, 24] });
+      const marker = L.marker(point, { icon, title: labels.clusterCount(properties.places, properties.events), riseOnHover: true });
+      marker.on('add', () => {
+        const element = marker.getElement(); element.setAttribute('aria-label', marker.options.title);
+        element.dataset.kind = !properties.places ? 'events' : !properties.events ? 'places' : 'mixed';
+      });
+      marker.on('click', () => {
+        const zoom = Math.min(19, index.expansionZoom(properties.cluster_id));
+        if (zoom > map.getZoom()) map.setView(point, zoom, { animate: !motion.matches });
+        else {
+          clusterPopup = L.popup().setLatLng(point).setContent(clusterContents(feature)).openOn(map);
+          clusterPopup.getElement().querySelector('button')?.focus({ preventScroll: true });
+        }
+      });
+      marker.addTo(discoveryLayer);
+    }
+  }
+  function rebuild() {
+    if (destroyed) return;
+    clusterPopup?.remove(); clusterPopup = undefined;
+    if (focused && !visibleItem(focused)) clearFocus(false);
+    const items = [...placeItems, ...eventItems].filter(item => visibleItem(item) && item.key !== focused?.key);
+    index = discoveryIndex(items); renderDiscovery();
+    if (focusMarker) { focusMarker.setPopupContent(popupContent(focused)); decorate(focusMarker, focused); }
+  }
+  function refresh() {
+    if (pending) return;
+    pending = true; queueMicrotask(() => { pending = false; rebuild(); });
+  }
+  function fitInitial(items) {
+    if (fitted || !items.length) return;
+    fitted = true;
+    map.fitBounds(L.latLngBounds(items.map(item => [item.latitude, item.longitude])), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
+  }
+  map.on('moveend', renderDiscovery);
+  fitInitial(placeItems); refresh();
   const resize = new ResizeObserver(() => map.invalidateSize({ pan: false }));
   resize.observe(container);
-  const eventLayer = L.layerGroup().addTo(map);
-  const eventMarkers = new Map();
   const routeLayer = L.layerGroup().addTo(map);
   const previewLayer = L.layerGroup().addTo(map);
   const originLayer = L.layerGroup().addTo(map);
@@ -68,6 +168,7 @@ export function placesMap(container, city, places, labels, onSelect) {
   }
   container.addEventListener('keydown', keydown);
   return {
+    view() { const centre = map.getCenter().wrap(); return { latitude: centre.lat, longitude: centre.lng, zoom: map.getZoom() }; },
     pickStart(pick, cancel) { picker = { pick, cancel }; container.classList.add('picking-start'); container.focus(); },
     cancelStart() { picker = undefined; container.classList.remove('picking-start'); },
     setOrigin(point, title) {
@@ -138,64 +239,22 @@ export function placesMap(container, city, places, labels, onSelect) {
       points.push(...stops.filter(stop => stop.location).map(stop => [stop.location.latitude, stop.location.longitude]));
       if (fit && points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
     },
-    setStates(states, onlyAvailable) {
-      for (const [i, marker] of markers.entries()) {
-        const badge = marker.getPopup().getContent().querySelector('.opening-state');
-        badge.textContent = states[i].label;
-        badge.dataset.state = states[i].state;
-        if (onlyAvailable && states[i].state !== 'open') map.removeLayer(marker);
-        else if (!map.hasLayer(marker)) marker.addTo(map);
-        const element = marker.getElement();
-        if (element) {
-          element.dataset.state = states[i].state;
-          const place = places[i];
-          element.dataset.group = placeGroup(place.category);
-          const title = `${labels.name(place)} · ${labels[place.category] || labels[placeSymbols[placeGroup(place.category)].label]} · ${states[i].label}`;
-          element.title = title; element.setAttribute('aria-label', title);
-        }
-      }
+    setStates(value, availableOnly) {
+      states = value; onlyAvailable = availableOnly; refresh();
     },
-    select(index) { map.setView(markers[index].getLatLng(), Math.max(16, map.getZoom()), { animate: !motion.matches }); markers[index].openPopup(); },
-    setEvents(events) {
-      eventLayer.clearLayers();
-      eventMarkers.clear();
-      for (const event of events.filter(event => event.location)) {
-        const popup = document.createElement('div');
-        const title = document.createElement('a');
-        title.href = event.url;
-        title.textContent = event.title;
-        const info = document.createElement('p');
-        info.textContent = [event.mapLabel, event.venue].filter(Boolean).join(' · ');
-        const state = document.createElement('p');
-        state.className = 'event-state';
-        popup.append(title, info, state);
-        const icon = L.divIcon({ className: 'event-marker', html: markerFace('calendar-days'), iconSize: [34, 34], iconAnchor: [17, 17] });
-        const marker = L.marker([event.location.latitude, event.location.longitude], {
-          icon, title: event.title + ' · ' + event.mapLabel, alt: event.title, riseOnHover: true,
-        }).bindPopup(popup).addTo(eventLayer);
-        eventMarkers.set(event, marker);
-      }
-      const points = [...markers, ...eventMarkers.values()].map(marker => marker.getLatLng());
-      if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
+    select(index) { selectItem(placeItems[index]); },
+    setEvents(value) {
+      if (focused?.kind === 'event') clearFocus(false);
+      events = value;
+      eventItems = events.flatMap((event, index) => event.location ? [{ ...event, kind: 'event', key: 'e:' + index, index, ...event.location }] : []);
+      fitInitial(eventItems); refresh();
     },
-    setEventStates(states, onlyAvailable) {
-      for (const [event, marker] of eventMarkers) {
-        const info = states.get(event);
-        const badge = marker.getPopup().getContent().querySelector('.event-state');
-        badge.textContent = info.label;
-        if (onlyAvailable && !info.available) eventLayer.removeLayer(marker);
-        else if (!eventLayer.hasLayer(marker)) marker.addTo(eventLayer);
-        const element = marker.getElement();
-        if (element) {
-          element.dataset.state = info.state;
-          element.setAttribute('aria-label', [event.title, labels.legendEvents, event.mapLabel, info.label].filter(Boolean).join(' · '));
-        }
-      }
+    setEventStates(value, availableOnly) {
+      eventStates = value; onlyAvailable = availableOnly; refresh();
     },
     selectEvent(event) {
-      const marker = eventMarkers.get(event);
-      if (marker) { map.setView(marker.getLatLng(), 16, { animate: !motion.matches }); marker.openPopup(); }
+      selectItem(eventItems.find(item => events[item.index] === event));
     },
-    destroy() { resize.disconnect(); container.removeEventListener('keydown', keydown); map.remove(); message.remove(); },
+    destroy() { destroyed = true; resize.disconnect(); map.off('moveend', renderDiscovery); container.removeEventListener('keydown', keydown); map.remove(); message.remove(); },
   };
 }

@@ -26,11 +26,11 @@ export function updateLegend(element, places, labels) {
   const groups = [...new Set(places.map(place => placeGroup(place.category)))];
   const entries = groups.map(group => ({ group, ...placeSymbols[group] }));
   entries.push({ group: 'event', icon: 'calendar-days', label: 'legendEvents' },
-    { group: 'origin', icon: 'flag', label: 'origin' }, { group: 'route', label: 'legendRoute' });
+    { group: 'origin', icon: 'flag', label: 'origin' }, { group: 'route', label: 'legendRoute' }, { group: 'cluster', label: 'legendCluster' });
   for (const entry of entries) {
     const item = document.createElement('li'); item.dataset.group = entry.group;
     const symbol = document.createElement('span'); symbol.className = 'legend-symbol';
-    symbol.append(entry.icon ? icon(entry.icon) : document.createTextNode('1'));
+    symbol.append(entry.icon ? icon(entry.icon) : document.createTextNode(entry.group === 'cluster' ? '12' : '1'));
     item.append(symbol, document.createTextNode(labels[entry.label])); element.append(item);
   }
 }

@@ -14,8 +14,8 @@ function validBoundary(boundary) {
 
 export async function loadPlaces(city, { signal, fetchResponse = fetch, storage, scope = 'city' } = {}) {
   if (!['city', 'nearby'].includes(scope)) throw Error('Invalid place search scope');
-  const limit = scope === 'city' ? 24 : 12;
-  const key = `worth-a-stop.places.v4.${scope}.${scope === 'city' ? city.id + '.' : ''}${city.latitude}.${city.longitude}`;
+  const limit = scope === 'city' ? Infinity : 12;
+  const key = `worth-a-stop.places.v5.${scope}.${scope === 'city' ? city.id + '.' : ''}${city.latitude}.${city.longitude}`;
   const validResult = result => validPlaces(result?.places, limit) && (scope !== 'city' || validBoundary(result.boundary));
   let saved;
   try {
@@ -23,7 +23,7 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
     if (validResult(data) && Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now()) saved = data;
   } catch { /* Storage is optional. */ }
   try {
-    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '6' });
+    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '7' });
     if (scope === 'city') { query.set('id', city.id); query.set('name', city.name); }
     const response = await fetchResponse('/api/places?' + query, { signal });
     if (response.status === 422) throw Object.assign(Error('City boundary unavailable'), { code: 'CITY_BOUNDARY_UNAVAILABLE' });

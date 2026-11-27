@@ -1,4 +1,4 @@
-export const iconNames = ['arrow-down', 'arrow-left', 'arrow-up', 'binoculars', 'calendar-days', 'castle', 'check',
+export const iconNames = ['arrow-down', 'arrow-left', 'arrow-right', 'arrow-up', 'binoculars', 'calendar-days', 'castle', 'check',
   'church', 'flag', 'landmark', 'map-pin', 'moon', 'palette', 'plus', 'route', 'search',
   'shopping-basket', 'sparkles', 'sun', 'trash-2', 'trees', 'undo-2', 'x'];
 

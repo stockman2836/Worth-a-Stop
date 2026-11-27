@@ -110,7 +110,7 @@ test('city discovery includes documented landmarks beyond the local radius witho
     return Response.json({ elements: [{ type: 'area', id: 3600041485 }, ...ordinary, other, ...landmarks] });
   };
   const { places, boundary } = await nearbyPlaces(centre, { scope: 'city', fetchResponse });
-  assert.equal(places.length, 24);
+  assert.equal(places.length, 34);
   assert.deepEqual(new Set(places.slice(0, 3).map(place => place.name)), new Set(landmarks.map(place => place.tags.name)));
   assert.ok(places.find(place => place.name === 'Pantheon').km > 2);
   assert.ok(places.find(place => place.name === 'Basilica di San Pietro').km > 4);

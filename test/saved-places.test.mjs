@@ -47,7 +47,7 @@ test('city and local searches use separate versioned cache entries and the corre
   assert.equal(calls[0].searchParams.get('scope'), 'city');
   assert.equal(calls[0].searchParams.get('id'), '42');
   assert.equal(calls[0].searchParams.get('name'), 'Town');
-  assert.equal(calls[0].searchParams.get('v'), '6');
+  assert.equal(calls[0].searchParams.get('v'), '7');
   assert.equal(calls[0].searchParams.has('radius'), false);
   await assert.rejects(loadPlaces(city, { storage: saved, scope: 'nearby', fetchResponse: unavailable }));
   await loadPlaces(city, { storage: saved, scope: 'nearby', fetchResponse });
@@ -56,12 +56,12 @@ test('city and local searches use separate versioned cache entries and the corre
   await assert.rejects(loadPlaces(city, { scope: 'world', fetchResponse }), /scope/);
 });
 
-test('accepts 24 city suggestions and leaves old shortlist caches unused', async () => {
+test('accepts thousands of city places and leaves capped shortlist caches unused', async () => {
   const saved = storage();
-  saved.setItem(`worth-a-stop.places.v3.6.${city.latitude}.${city.longitude}`, JSON.stringify({ places: [place], checkedAt: Date.now() }));
+  saved.setItem(`worth-a-stop.places.v4.city.${city.id}.${city.latitude}.${city.longitude}`, JSON.stringify({ places: [place], boundary, checkedAt: Date.now() }));
   await assert.rejects(loadPlaces(city, { storage: saved, fetchResponse: unavailable }));
-  const places = Array.from({ length: 24 }, (_,index) => ({ ...place, name: 'Place ' + index, url: 'https://www.openstreetmap.org/node/' + index }));
-  assert.equal((await loadPlaces(city, { storage: saved, fetchResponse: async () => Response.json({ places, boundary }) })).places.length, 24);
+  const places = Array.from({ length: 3000 }, (_,index) => ({ ...place, name: 'Place ' + index, url: 'https://www.openstreetmap.org/node/' + index }));
+  assert.equal((await loadPlaces(city, { storage: saved, fetchResponse: async () => Response.json({ places, boundary }) })).places.length, 3000);
   await assert.rejects(loadPlaces(city, { scope: 'nearby', fetchResponse: async () => Response.json(places) }), /Invalid places/);
 });
 

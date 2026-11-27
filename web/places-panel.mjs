@@ -4,11 +4,16 @@ import { openingState, localClock, localInstant } from './opening-hours.mjs';
 import { eventState } from './event-state.mjs';
 import { todayIn } from './day-agenda.mjs';
 import { iconLabel } from './icons.mjs';
-import { placeGroup, placeSymbols, updateLegend } from './map-symbols.mjs';
+import { updateLegend } from './map-symbols.mjs';
+import { placeList } from './place-list.mjs';
 
 const copy = {
   ru: { title: 'Места города', loading: 'Ищем границу города и интересные места…', empty: 'В границах города подходящих мест не найдено.',
-    scope: 'Подборка по всему городу · до 24 мест', boundary: 'Граница поиска', boundaryError: 'Не удалось подтвердить границу выбранного города. Поиск по всему городу недоступен.', sourceError: 'Источники мест временно недоступны. Попробуйте снова через минуту.', error: 'Не удалось загрузить места.', retry: 'Попробовать снова',
+    scope: 'Места по всему городу', boundary: 'Граница поиска', boundaryError: 'Не удалось подтвердить границу выбранного города. Поиск по всему городу недоступен.', sourceError: 'Источники мест временно недоступны. Попробуйте снова через минуту.', error: 'Не удалось загрузить места.', retry: 'Попробовать снова',
+    pages: 'Страницы мест', previous: 'Назад', next: 'Дальше', pageRange: (first, last, total) => `Показаны ${first}–${last} из ${total}`,
+    clusterCount: (places, events) => `Места: ${places}, события: ${events}. Приблизьте карту или выберите объект в группе.`,
+    clusterKinds: (places, events) => [places && `М:${places}`, events && `С:${events}`].filter(Boolean).join(' · '),
+    clusterMore: 'Показать ещё', legendCluster: 'Группа: М — места, С — события',
     hours: 'Часы работы', museum: 'Музей', gallery: 'Галерея', viewpoint: 'Смотровая площадка',
     attraction: 'Достопримечательность', castle: 'Замок', monument: 'Памятник', ruins: 'Руины',
     archaeological_site: 'Археологический памятник', city_gate: 'Городские ворота', cathedral: 'Собор',
@@ -25,7 +30,11 @@ const copy = {
     upcoming: 'Позже', ended: 'Завершилось', eventUnknown: 'Время события неизвестно',
     filtered: (places, events) => `Доступно мест — ${places}, событий — ${events}. Неизвестное расписание скрыто.` },
   en: { title: 'City places', loading: 'Looking for the city boundary and places…', empty: 'No matching places within the city boundary.',
-    scope: 'Citywide shortlist · up to 24 places', boundary: 'Search boundary', boundaryError: 'Could not confirm the selected city boundary. Citywide search is unavailable.', sourceError: 'Place sources are temporarily unavailable. Try again in a minute.', error: 'Could not load places.', retry: 'Try again',
+    scope: 'Places across the city', boundary: 'Search boundary', boundaryError: 'Could not confirm the selected city boundary. Citywide search is unavailable.', sourceError: 'Place sources are temporarily unavailable. Try again in a minute.', error: 'Could not load places.', retry: 'Try again',
+    pages: 'Place pages', previous: 'Previous', next: 'Next', pageRange: (first, last, total) => `Showing ${first}–${last} of ${total}`,
+    clusterCount: (places, events) => `Places: ${places}, events: ${events}. Zoom in or choose an item in the group.`,
+    clusterKinds: (places, events) => [places && `P:${places}`, events && `E:${events}`].filter(Boolean).join(' · '),
+    clusterMore: 'Show more', legendCluster: 'Group: P — places, E — events',
     hours: 'Opening hours', museum: 'Museum', gallery: 'Gallery', viewpoint: 'Viewpoint',
     attraction: 'Attraction', castle: 'Castle', monument: 'Monument', ruins: 'Ruins',
     archaeological_site: 'Archaeological site', city_gate: 'City gate', cathedral: 'Cathedral',
@@ -52,8 +61,8 @@ export function placesPanel(city, language, signal, open, selection) {
   summary.setAttribute('aria-label', text.title + ' · ' + city.name);
   const status = document.createElement('p');
   status.setAttribute('role', 'status');
-  const list = document.createElement('ul');
-  list.className = 'places';
+  const listView = placeList(language, text, () => itinerary, index => { route.focused = false; map?.select(index); }, selection?.placePage);
+  const list = listView.element;
   const mapBox = document.createElement('div');
   mapBox.className = 'places-map';
   mapBox.setAttribute('role', 'region');
@@ -143,12 +152,7 @@ export function placesPanel(city, language, signal, open, selection) {
       const state = city.timezone ? openingState(place.hours, day.value, clock.value, zone) : 'unknown';
       return { state, label: state === 'unknown' ? text.uncertain : text[state] };
     });
-    for (const [i, item] of [...list.children].entries()) {
-      const badge = item.querySelector('.opening-state');
-      badge.textContent = states[i].label;
-      badge.dataset.state = states[i].state;
-      item.hidden = filter.checked && states[i].state !== 'open';
-    }
+    listView.update(loadedPlaces, states, filter.checked);
     map?.setStates(states, filter.checked);
     map?.setEventStates(new Map(events.map(event => [event, eventInfo(event)])), filter.checked);
     filterMessage.textContent = filter.checked
@@ -172,7 +176,7 @@ export function placesPanel(city, language, signal, open, selection) {
   function ensureMap() {
     if (map || !details.open || signal.aborted) return;
     mapBox.hidden = false;
-    map = placesMap(mapBox, city, [], { ...text, name: place => place.names[language] || place.name }, () => {});
+    map = placesMap(mapBox, city, [], { ...text, name: place => place.names[language] || place.name }, () => {}, selection?.mapView);
     map.setEvents(events);
     map.setRoute(route.legs, route.stops, route.focused);
     configureOrigin();
@@ -201,53 +205,25 @@ export function placesPanel(city, language, signal, open, selection) {
   iconLabel(cancelPick, 'x', text.cancelPick);
   cancelPick.addEventListener('click', cancelStartSelection);
   pickerBox.append(pickHint, cancelPick);
-  details.append(summary, controls, slider, filterLabel, filterMessage, status, retry, mapBox, pickerBox, legend, list, credit);
-  const km = new Intl.NumberFormat(language, { style: 'unit', unit: 'kilometer', maximumFractionDigits: 1 });
-  const metres = new Intl.NumberFormat(language, { style: 'unit', unit: 'meter', maximumFractionDigits: 0 });
+  details.append(summary, controls, slider, filterLabel, filterMessage, status, retry, mapBox, pickerBox, legend, list, listView.pagination, credit);
   async function load() {
     retry.hidden = true;
     status.textContent = text.loading;
     try {
       const { places, boundary, stale, checkedAt } = await loadPlaces(city, { signal, storage });
       if (signal.aborted) return;
+      const view = loadedPlaces.length ? map?.view() : selection?.mapView;
       map?.destroy();
       map = undefined;
       list.replaceChildren();
       mapBox.hidden = false;
       function select(index) {
-        for (const [i, item] of [...list.children].entries()) {
-          item.classList.toggle('selected', i === index);
-          item.querySelector('button').setAttribute('aria-pressed', String(i === index));
-        }
+        listView.select(index);
       }
-      map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name }, select);
+      map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name }, select, view);
       map.setEvents(events);
       map.setRoute(route.legs, route.stops, route.focused);
       configureOrigin();
-      for (const [index, place] of places.entries()) {
-        const item = document.createElement('li');
-        const show = document.createElement('button');
-        show.type = 'button';
-        show.className = 'show-place';
-        show.textContent = place.names[language] || place.name;
-        show.setAttribute('aria-pressed', 'false');
-        show.addEventListener('click', () => { route.focused = false; map.select(index); });
-        const link = document.createElement('a');
-        link.href = place.url;
-        link.textContent = text.source;
-        const info = document.createElement('span');
-        info.className = 'event-venue';
-        const distance = place.km < 1 ? metres.format(place.km * 1000) : km.format(place.km);
-        info.textContent = [distance, place.hours && text.hours + ' · ' + place.hours].filter(Boolean).join(' · ');
-        const badge = document.createElement('span');
-        badge.className = 'opening-state';
-        const category = document.createElement('span');
-        category.className = 'place-category';
-        category.dataset.group = placeGroup(place.category);
-        iconLabel(category, placeSymbols[placeGroup(place.category)].icon, text[place.category] || place.category);
-        item.append(category, show, badge, info, link, itinerary.button(place, 'place'));
-        list.append(item);
-      }
       loadedPlaces = places;
       updateLegend(legend, places, text);
       updateHours();
@@ -278,7 +254,7 @@ export function placesPanel(city, language, signal, open, selection) {
     element: details,
     mapElements: { canvas: mapBox, picker: pickerBox, legend, credit },
     previewElements: { controls, slider, filter: filterLabel, message: filterMessage },
-    selection() { return { date: day.value, time: clock.value, available: filter.checked }; },
+    selection() { return { date: day.value, time: clock.value, available: filter.checked, placePage: listView.getPage(), mapView: map?.view() || selection?.mapView }; },
     setTime(value) { clock.value = value; updateHours(); },
     setDay,
     getDay() { return day.value; },

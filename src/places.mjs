@@ -73,16 +73,16 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
   }
   places.sort((a, b) => b.rank - a.rank || a.km - b.km);
   const unique = [];
-  const limit = boundary ? 24 : 12;
+  const identities = new Set(), names = new Map();
   const normalize = value => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().trim();
   for (const place of places) {
-    const duplicate = unique.some(other => place.identity && place.identity === other.identity ||
-      normalize(place.name) === normalize(other.name) &&
-      distance(place.latitude, place.longitude, other.latitude, other.longitude) < .2);
-    if (!duplicate) unique.push(place);
-    if (unique.length === limit) break;
+    if (place.identity && identities.has(place.identity)) continue;
+    const name = normalize(place.name), matches = names.get(name) || [];
+    if (matches.some(other => distance(place.latitude, place.longitude, other.latitude, other.longitude) < .2)) continue;
+    unique.push(place); matches.push(place); names.set(name, matches);
+    if (place.identity) identities.add(place.identity);
+    if (!boundary && unique.length === 12) break;
   }
-  // Category quotas must not displace better documented landmarks.
-  const shortlist = unique.map(({ rank, identity, ...place }) => place);
-  return boundary ? { places: shortlist, boundary: { name: boundary.name, url: boundary.url } } : shortlist;
+  const result = unique.map(({ rank, identity, ...place }) => place);
+  return boundary ? { places: result, boundary: { name: boundary.name, url: boundary.url } } : result;
 }

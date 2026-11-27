@@ -3,10 +3,14 @@ import { validExtent } from './overpass-coverage.mjs';
 import { tiledBounds } from './city-boundary-parts.mjs';
 
 export const categories = {
-  tourism: ['attraction', 'museum', 'viewpoint', 'gallery'],
+  tourism: ['attraction', 'museum', 'viewpoint', 'gallery', 'artwork'],
   historic: ['castle', 'monument', 'ruins', 'archaeological_site', 'city_gate', 'amphitheatre', 'fort', 'palace', 'church', 'temple', 'monastery'],
-  building: ['cathedral', 'basilica', 'church', 'temple', 'monastery'], leisure: ['park', 'garden'], amenity: ['marketplace'],
+  building: ['cathedral', 'basilica', 'church', 'temple', 'monastery'], leisure: ['park', 'garden'], amenity: ['marketplace', 'theatre'],
 };
+
+// Broader cultural categories need reference evidence, so adding a landmark
+// does not also flood discovery with every named mural or small venue.
+export const documentedCategories = { tourism: ['artwork'], amenity: ['theatre'] };
 
 function localBounds({ latitude, longitude }) {
   const dy = 2 / 110.5, dx = dy / Math.cos(latitude * Math.PI / 180);
@@ -30,15 +34,20 @@ export async function placeElements(city, boundary, { signal, fetchResponse = fe
   async function load(box) {
     const spatialBox = validExtent(box) ? `(${box.minlat},${box.minlon},${box.maxlat},${box.maxlon})` : '';
     const spatial = !tiled && spatialBox ? `nwr${spatialBox}[name]->.nearby;` : '';
-    const filters = Object.entries(categories).map(([tag, values]) => {
-      const category = `[${tag}~"^(${values.join('|')})$"]`;
-      if (tiled) return `nwr${category}[name]${spatialBox};`;
-      return spatialBox ? `nwr.nearby${category};` : `nwr${category}[name](${boundary ? 'area.city' : localBounds(city)});`;
+    const filters = Object.entries(categories).flatMap(([tag, values]) => {
+      const restricted = documentedCategories[tag] ?? [];
+      const regular = values.filter(value => !restricted.includes(value));
+      const conditions = [regular.length && `[${tag}~"^(${regular.join('|')})$"]`,
+        ...restricted.flatMap(value => ['wikidata', 'wikipedia', 'heritage'].map(proof => `[${tag}=${value}][${proof}]`))].filter(Boolean);
+      return conditions.map(condition => {
+        if (tiled) return `nwr${condition}[name]${spatialBox};`;
+        return spatialBox ? `nwr.nearby${condition};` : `nwr${condition}[name](${boundary ? 'area.city' : localBounds(city)});`;
+      });
     });
     const membership = !tiled && boundary && spatialBox ? `->.candidates;nwr.candidates(area.city)${spatialBox}` : '';
     const area = !tiled && boundary ? `rel(${boundary.relation});map_to_area->.city;.city out tags;` : '';
     const query = `${area}${spatial}(${filters.join('')})${membership};out ${tiled ? 'body geom' : 'tags center'};`;
-    const key = 'tile-v2/' + boundary?.relation + '/' + query;
+    const key = 'tile-v3/' + boundary?.relation + '/' + query;
     const saved = tiled ? await queryCache?.get(key).catch(() => undefined) : undefined;
     if (saved?.expires > Date.now() && Array.isArray(saved.value)) return saved.value;
     const subdivide = tiled ? Math.max(box.maxlat - box.minlat, box.maxlon - box.minlon) > .025 : Boolean(boundary && spatialBox);

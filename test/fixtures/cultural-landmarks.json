@@ -1,0 +1,56 @@
+[
+  {
+    "type": "way",
+    "id": 146457741,
+    "center": {
+      "lat": 44.1170401,
+      "lon": 15.2199924
+    },
+    "tags": {
+      "artist_name": "Nikola Bašić",
+      "artwork_type": "sound_sculpture",
+      "check_date": "2026-05-18",
+      "name": "Morske orgulje",
+      "name:cs": "Mořské varhany",
+      "name:de": "Meeresorgel",
+      "name:en": "Sea organ",
+      "name:es": "Órgano de mar",
+      "name:fr": "Orgue maritime",
+      "name:hr": "Morske orgulje",
+      "name:it": "Organo marino",
+      "name:nl": "Zee-orgel",
+      "name:ru": "Морской орган",
+      "name:sk": "Morský organ",
+      "start_date": "2005",
+      "tourism": "artwork",
+      "website": "https://zadar.travel/attractions/attractions/sea-organ",
+      "wheelchair": "yes",
+      "wikidata": "Q2268940",
+      "wikipedia": "hr:Morske orgulje"
+    }
+  },
+  {
+    "type": "way",
+    "id": 1041142766,
+    "center": {
+      "lat": 47.0960277,
+      "lon": 37.5486032
+    },
+    "tags": {
+      "alt_name": "Драмтеатр",
+      "alt_name:ru": "Драмтеатр",
+      "alt_name:uk": "Драмтеатр",
+      "amenity": "theatre",
+      "building": "yes",
+      "name": "Драматический театр",
+      "name:cs": "Činoherní divadlo",
+      "name:en": "Theatre of Drama",
+      "name:fr": "Théâtre d'art dramatique régional de Donetsk",
+      "name:ru": "Драматический театр",
+      "name:uk": "Драматичний театр",
+      "theatre:genre": "drama",
+      "wikidata": "Q4166247",
+      "wikipedia": "uk:Донецький академічний обласний драматичний театр"
+    }
+  }
+]

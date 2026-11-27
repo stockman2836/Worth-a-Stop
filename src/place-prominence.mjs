@@ -17,7 +17,7 @@ export function classifyProminence(places) {
   const threshold = Math.min(27, Math.max(14, strongest * .75));
   return places.map(place => {
     const { signals, rank, identity, ...value } = place;
-    const cultural = ['museum', 'gallery'].includes(place.category) && signals.languages >= 5;
+    const cultural = ['museum', 'gallery', 'artwork', 'theatre'].includes(place.category) && signals.languages >= 5;
     const outdoors = ['park', 'garden', 'viewpoint'].includes(place.category) && signals.wikipedia && signals.languages >= 3;
     const highlight = signals.documented && (rank >= threshold || signals.international || cultural || outdoors);
     const prominence = highlight ? 'highlight' : signals.documented || signals.heritage ? 'notable' : 'local';

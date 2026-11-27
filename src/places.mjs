@@ -1,7 +1,7 @@
 import { cityBoundary } from './city-boundary.mjs';
 import { containsPoint, cityBoundaryParts } from './city-boundary-parts.mjs';
 import { prominenceSignals, classifyProminence } from './place-prominence.mjs';
-import { categories, placeElements } from './place-elements.mjs';
+import { categories, documentedCategories, placeElements } from './place-elements.mjs';
 
 function importance(tags, translations) {
   const landmark = categories.building.includes(tags.building) || tags.tourism === 'attraction' || categories.historic.includes(tags.historic);
@@ -76,12 +76,13 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
         categories.historic.includes(tags.historic) ? 'historic' : Object.keys(categories).find(k => categories[k].includes(tags[k]));
       const name = tags.name;
       if (!key || !name || ['private', 'no'].includes(tags.access) || tags.opening_hours === 'off') continue;
-      if (key === 'amenity' && (tags.shop || !(
+      const signals = prominenceSignals(tags);
+      if (documentedCategories[key]?.includes(tags[key]) && !signals.documented && !signals.heritage) continue;
+      if (key === 'amenity' && tags.amenity === 'marketplace' && (tags.shop || !(
         type !== 'node' || tags.marketplace || tags.market || tags.wikidata || tags.building === 'marketplace'
       ))) continue;
       const km = distance(latitude, longitude, point.lat, point.lon);
       if (!boundary && km > 2) continue;
-      const signals = prominenceSignals(tags);
       places.push({ latitude: point.lat, longitude: point.lon, name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
         rank: importance(tags, signals.languages),
         signals,

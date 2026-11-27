@@ -2,12 +2,14 @@ import { icon } from './icons.mjs';
 
 export const placeSymbols = {
   museum: { icon: 'landmark', label: 'legendMuseums' }, gallery: { icon: 'palette', label: 'legendArt' },
+  theatre: { icon: 'drama', label: 'theatre' },
   historic: { icon: 'castle', label: 'legendHistoric' }, worship: { icon: 'church', label: 'legendWorship' },
   nature: { icon: 'trees', label: 'legendNature' }, viewpoint: { icon: 'binoculars', label: 'viewpoint' },
   marketplace: { icon: 'shopping-basket', label: 'marketplace' }, attraction: { icon: 'map-pin', label: 'attraction' },
 };
 
 export function placeGroup(category) {
+  if (category === 'artwork') return 'gallery';
   if (['castle', 'monument', 'ruins', 'archaeological_site', 'city_gate', 'amphitheatre', 'fort', 'palace'].includes(category)) return 'historic';
   if (['cathedral', 'basilica', 'church', 'temple', 'monastery'].includes(category)) return 'worship';
   if (['park', 'garden'].includes(category)) return 'nature';

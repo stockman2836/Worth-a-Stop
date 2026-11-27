@@ -382,6 +382,8 @@ main { width: min(74rem, calc(100% - 4rem)); }
 .leaflet-marker-icon:focus-visible .marker-face { outline: 3px solid var(--focus); outline-offset: 3px; }
 .map-legend { display: flex; flex-wrap: wrap; gap: .55rem 1rem; list-style: none; padding: .9rem 0; margin: 0; color: var(--secondary); font-size: .75rem; }
 .map-legend li { display: inline-flex; align-items: center; gap: .4rem; }
+[data-group="theatre"] { --symbol-color: #77509a; }
+:root[data-theme="dark"] [data-group="theatre"] { --symbol-color: #c7a4e7; }
 .legend-symbol { width: 1.6rem; height: 1.6rem; display: inline-grid; place-items: center; flex: none; color: var(--symbol-color, var(--accent)); background: var(--surface); border: 1px solid var(--line-strong); border-radius: 50%; font-weight: 700; }
 .map-legend [data-group="event"] .legend-symbol { border-radius: .4rem; color: var(--warning); }
 .map-legend [data-group="route"] .legend-symbol { background: var(--accent); color: var(--accent-ink); }

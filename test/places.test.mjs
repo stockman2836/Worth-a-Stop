@@ -48,6 +48,18 @@ test('distinguishes an empty area from an incomplete Overpass response', async (
   await assert.rejects(nearbyPlaces(city, { fetchResponse: async () => Response.json({ elements: [], remark: 'timeout' }) }));
 });
 
+test('cultural discovery keeps documented venues without admitting every named artwork or theatre', async () => {
+  const sample = (id, tags) => ({ ...node, id, tags: { name: 'Place ' + id, ...tags } });
+  const places = await query([
+    sample(1, { tourism: 'artwork' }), sample(2, { amenity: 'theatre' }),
+    sample(3, { tourism: 'artwork', wikidata: 'Q3' }), sample(4, { amenity: 'theatre', wikipedia: 'en:Theatre' }),
+    sample(5, { tourism: 'artwork', heritage: '2' }),
+    sample(6, { name: 'Drama theatre', highway: 'bus_stop', wikidata: 'Q6' }),
+  ]);
+  assert.deepEqual(new Set(places.map(place => place.name)), new Set(['Place 3', 'Place 4', 'Place 5']));
+  assert(places.every(place => place.prominence !== 'highlight'));
+});
+
 test('uses the other endpoint after an outage and respects a cancelled city search', async () => {
   const hosts = [];
   const places = await nearbyPlaces(city, { fetchResponse: async url => {
@@ -141,7 +153,8 @@ test('city discovery includes distant places without wiki annotations and reject
   } });
   assert.deepEqual(new Set(places.map(place => place.name)), new Set(['Temple', 'Distant park', 'Remote attraction']));
   assert.ok(places.some(place => place.km > 6));
-  assert.ok(!query.includes('around:') && !query.includes('[wikidata]'));
+  assert.ok(!query.includes('around:'));
+  assert.ok(query.includes('nwr[leisure~"^(park|garden)$"][name](area.city)'));
   await assert.rejects(nearbyPlaces(city, { scope: 'world' }), /scope/);
 });
 

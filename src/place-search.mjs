@@ -43,7 +43,7 @@ export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
   }
   return (city, { scope = 'nearby' } = {}) => {
     const identity = [city.id, city.latitude, city.longitude].join('/');
-    const key = 'places-v9/' + (scope === 'city' ? 'city/' + identity : ['nearby', city.latitude, city.longitude].join('/'));
+    const key = 'places-v10/' + (scope === 'city' ? 'city/' + identity : ['nearby', city.latitude, city.longitude].join('/'));
     return cached(results, key, 3600000, onProgress => discoverPlaces(city, {
       scope, fetchResponse, queryCache: diskCache, signal: AbortSignal.timeout(180000),
       onProgress: scope === 'city' ? onProgress : undefined,

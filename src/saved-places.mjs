@@ -33,9 +33,12 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
     const data = scope === 'city' ? payload : { places: payload };
     if (!validResult(data)) throw Error('Invalid places response');
     signal?.throwIfAborted();
-    const result = { places: data.places, ...(scope === 'city' && { boundary: data.boundary }), checkedAt: Date.now() };
+    if (data.incomplete && saved && !saved.incomplete) return { ...saved, stale: true, incomplete: true, loading: Boolean(data.loading) };
+    const result = { places: data.places, ...(scope === 'city' && { boundary: data.boundary }),
+      ...(data.incomplete && { incomplete: true }),
+      checkedAt: Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now() ? data.checkedAt : Date.now() };
     try { storage?.setItem(key, JSON.stringify(result)); } catch { /* Live results remain usable. */ }
-    return { ...result, stale: false };
+    return { ...result, stale: false, ...(data.loading && { loading: true }) };
   } catch (error) {
     signal?.throwIfAborted();
     if (saved) return { ...saved, stale: true };

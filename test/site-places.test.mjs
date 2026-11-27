@@ -24,7 +24,7 @@ test('place API separates city identities and local searches, validates scope an
     await import('./bin/site.mjs');
   `;
   const child = spawn(process.execPath, ['--input-type=module', '--eval', script], {
-    cwd: new URL('../', import.meta.url), env: { ...process.env, PORT: '0' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: new URL('../', import.meta.url), env: { ...process.env, PORT: '0', PLACE_CACHE_DIR: 'off' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   });
   t.after(async () => { child.kill(); if (child.exitCode === null && child.signalCode === null) await once(child, 'exit'); });
   const address = await new Promise((resolve, reject) => {

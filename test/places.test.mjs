@@ -117,6 +117,7 @@ test('city discovery includes documented landmarks beyond the local radius witho
   assert.ok(requested.includes('rel(41485);map_to_area->.city;'));
   assert.ok(requested.includes('(area.city)'));
   assert.ok(requested.includes('nwr(41.6,12.2,42.15,12.86)[name]->.nearby;'));
+  assert.ok(requested.includes('nwr.candidates(area.city)(41.6,12.2,42.15,12.86)'));
   assert.equal(requested.split('(area.city)').length - 1, 1);
   assert.ok(requested.includes('nwr.nearby['));
   assert.equal(boundary.url, 'https://www.openstreetmap.org/relation/41485');

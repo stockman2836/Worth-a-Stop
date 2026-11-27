@@ -49,3 +49,43 @@ test('does not reuse a boundary from another city or cache a failed boundary loo
   assert.equal(await search({ ...city, id: 43 }, { scope: 'city' }), 43);
   assert.equal(calls, 3);
 });
+
+test('publishes progress without restarting the shared job and replaces it with the complete result', async () => {
+  let finish, publish, calls = 0;
+  const finished = new Promise(resolve => { finish = resolve; });
+  const search = createPlaceSearch({ now: () => 1000, discoverPlaces: async (_city, { onProgress }) => {
+    calls++; publish = onProgress;
+    onProgress({ places: ['first'] });
+    await finished;
+    return { places: ['first', 'second'] };
+  } });
+  assert.deepEqual(await search(city, { scope: 'city' }), { places: ['first'], checkedAt: 1000, incomplete: true, loading: true });
+  publish({ places: ['first', 'second'] });
+  assert.equal((await search({ ...city, name: 'Translated' }, { scope: 'city' })).places.length, 2);
+  assert.equal(calls, 1);
+  finish(); await new Promise(setImmediate);
+  const result = await search(city, { scope: 'city' });
+  assert.equal(result.loading, undefined);
+  assert.equal(result.incomplete, undefined);
+  assert.deepEqual(result.places, ['first', 'second']);
+});
+
+test('keeps published places after a background failure and permits recovery after one minute', async () => {
+  let calls = 0, time = 1000;
+  const saved = new Map();
+  const search = createPlaceSearch({ now: () => time,
+    diskCache: { get: async key => saved.get(key), set: async (key, value) => saved.set(key, value) },
+    discoverPlaces: async (_city, { onProgress }) => {
+      calls++;
+      if (calls === 1) { onProgress({ places: ['landmark'] }); throw Error('offline'); }
+      return { places: ['landmark', 'park'] };
+    },
+  });
+  await search(city, { scope: 'city' }); await new Promise(setImmediate);
+  const partial = await search(city, { scope: 'city' });
+  assert.equal(partial.incomplete, true); assert.equal(partial.loading, undefined);
+  assert.equal(saved.size, 0);
+  time += 60001;
+  assert.equal((await search(city, { scope: 'city' })).places.length, 2);
+  assert.equal(calls, 2); assert.equal(saved.size, 1);
+});

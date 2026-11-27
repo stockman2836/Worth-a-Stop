@@ -1,4 +1,5 @@
 import { overpassQuery } from './overpass.mjs';
+import { cityBoundaryParts } from './city-boundary-parts.mjs';
 
 export function boundaryUnavailable() {
   return Object.assign(Error('City boundary unavailable'), { code: 'CITY_BOUNDARY_UNAVAILABLE' });
@@ -48,5 +49,7 @@ export async function cityBoundary(city, options = {}) {
   }
   if (!matches.length || matches.length > 1 && matches[0].score === matches[1].score) throw boundaryUnavailable();
   const { relation, name: boundaryName, bounds } = matches[0];
-  return { relation, name: boundaryName, bounds, url: `https://www.openstreetmap.org/relation/${relation}` };
+  const boundary = { relation, name: boundaryName, bounds, url: `https://www.openstreetmap.org/relation/${relation}` };
+  const shape = await cityBoundaryParts(boundary, city, options);
+  return { ...boundary, ...shape };
 }

@@ -74,3 +74,24 @@ test('requires a valid boundary for city results and distinguishes an unavailabl
   const empty = await loadPlaces(city, { fetchResponse: async () => Response.json({ places: [], boundary }) });
   assert.deepEqual(empty.places, []);
 });
+
+test('preserves progress timestamps and does not save a loading flag for offline restoration', async () => {
+  const saved = storage();
+  const result = await loadPlaces(city, { storage: saved, fetchResponse: async () =>
+    Response.json({ places: [place], boundary, checkedAt: 1000, incomplete: true, loading: true }) });
+  assert.equal(result.checkedAt, 1000); assert.equal(result.loading, true);
+  const offline = await loadPlaces(city, { storage: saved, fetchResponse: unavailable });
+  assert.equal(offline.incomplete, true); assert.equal(offline.loading, undefined);
+});
+
+test('a partial refresh cannot overwrite the last complete city catalogue', async () => {
+  const saved = storage();
+  await loadPlaces(city, { storage: saved, fetchResponse: cityResponse });
+  const result = await loadPlaces(city, { storage: saved, fetchResponse: async () =>
+    Response.json({ places: [], boundary, incomplete: true, loading: true }) });
+  assert.deepEqual(result.places, [place]);
+  assert.equal(result.incomplete, true); assert.equal(result.loading, true);
+  assert.equal(result.stale, true);
+  const offline = await loadPlaces(city, { storage: saved, fetchResponse: unavailable });
+  assert.equal(offline.incomplete, undefined);
+});

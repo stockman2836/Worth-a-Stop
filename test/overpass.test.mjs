@@ -64,3 +64,59 @@ test('a replica without the requested generated city area cannot masquerade as a
   assert.equal(result.length, 1);
   assert.deepEqual(calls, ['ovp.dresel.systems', 'maps.mail.ru']);
 });
+
+test('keeps a covered regional replica ahead of a recently successful global source', async () => {
+  const calls = [];
+  const client = createOverpassClient({ now: () => 1000, mirrors: async extent => extent ? ['https://regional.test/interpreter'] : [],
+    fetchResponse: async url => { calls.push(url.hostname); return Response.json({ elements: [] }); } });
+  await client('out;');
+  await client('out;', { extent: {} });
+  assert.deepEqual(calls, ['maps.mail.ru', 'regional.test']);
+});
+
+test('a query timeout requests subdivision without poisoning the healthy provider', async () => {
+  const calls = [];
+  const client = createOverpassClient({ mirrors: async () => ['https://regional.test/interpreter'], fetchResponse: async url => {
+    calls.push(url.hostname);
+    return Response.json(calls.length === 1 ? { elements: [], remark: 'Query timed out' } : { elements: [] });
+  } });
+  await assert.rejects(client('out;', { subdivide: true }), { code: 'PLACE_QUERY_TOO_LARGE' });
+  await client('out;', { subdivide: true });
+  assert.deepEqual(calls, ['regional.test', 'regional.test']);
+});
+
+test('sends long spatial queries through POST without exceeding URL limits', async () => {
+  const data = 'node(1);'.repeat(1000);
+  const client = createOverpassClient({ mirrors: async () => [], fetchResponse: async (url, options) => {
+    assert.equal(url.search, '');
+    assert.equal(options.method, 'POST');
+    assert.ok(new URLSearchParams(options.body).get('data').endsWith(data));
+    return Response.json({ elements: [] });
+  } });
+  await client(data);
+});
+
+test('shares provider slots across city jobs and cancels queued requests without using a slot', async () => {
+  let active = 0, maximum = 0, requests = 0;
+  const releases = [];
+  const client = createOverpassClient({ mirrors: async () => ['https://regional.test/interpreter'], fetchResponse: async () => {
+    requests++; maximum = Math.max(maximum, ++active);
+    await new Promise(resolve => releases.push(resolve)); active--;
+    return Response.json({ elements: [] });
+  } });
+  const first = Array.from({ length: 3 }, () => client('out;'));
+  await new Promise(setImmediate);
+  const controller = new AbortController();
+  const cancelled = client('out;', { signal: controller.signal });
+  const queued = client('out;');
+  await new Promise(setImmediate);
+  assert.equal(requests, 3); assert.equal(active, 3);
+  controller.abort();
+  await assert.rejects(cancelled, { name: 'AbortError' });
+  releases.splice(0).forEach(release => release());
+  await new Promise(setImmediate);
+  assert.equal(requests, 4); assert.equal(active, 1);
+  releases.splice(0).forEach(release => release());
+  await Promise.all([...first, queued]);
+  assert.equal(maximum, 3);
+});

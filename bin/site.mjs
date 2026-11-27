@@ -4,6 +4,8 @@ import { officialCalendars } from '../src/official-calendars.mjs';
 import { officialEvents } from '../src/official-events.mjs';
 import { validCalendarDay } from '../src/calendar-navigation.mjs';
 import { createPlaceSearch } from '../src/place-search.mjs';
+import { createPlaceCache } from '../src/place-cache.mjs';
+import { fileURLToPath } from 'node:url';
 import { createWalkingRouter } from '../src/walking-router.mjs';
 
 const assets = new Map([
@@ -58,7 +60,8 @@ const assets = new Map([
   ['/guides.mjs', ['../src/guides.mjs', 'text/javascript']],
 ]);
 
-const searchPlaces = createPlaceSearch();
+const searchPlaces = createPlaceSearch({ diskCache: process.env.PLACE_CACHE_DIR === 'off' ? undefined :
+  createPlaceCache(process.env.PLACE_CACHE_DIR || fileURLToPath(new URL('../.cache/places', import.meta.url))) });
 const walkingRoute = createWalkingRouter();
 const server = createServer(async (request, response) => {
   if (request.method === 'GET' && request.url.startsWith('/api/walking?')) {
@@ -92,7 +95,8 @@ const server = createServer(async (request, response) => {
     }
     try {
       const places = await searchPlaces({ latitude, longitude, id, name }, { scope });
-      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, max-age=3600' }).end(JSON.stringify(places));
+      response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': places.incomplete ? 'no-store' : 'private, max-age=3600' }).end(JSON.stringify(places));
     } catch (error) {
       const boundaryMissing = error.code === 'CITY_BOUNDARY_UNAVAILABLE';
       response.writeHead(boundaryMissing ? 422 : 503, {

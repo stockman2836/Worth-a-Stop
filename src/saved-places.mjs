@@ -27,6 +27,7 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
     if (scope === 'city') { query.set('id', city.id); query.set('name', city.name); }
     const response = await fetchResponse('/api/places?' + query, { signal });
     if (response.status === 422) throw Object.assign(Error('City boundary unavailable'), { code: 'CITY_BOUNDARY_UNAVAILABLE' });
+    if (response.status === 503) throw Object.assign(Error('Place sources temporarily unavailable'), { code: 'PLACE_SOURCE_UNAVAILABLE' });
     if (!response.ok) throw Error('Places unavailable');
     const payload = await response.json();
     const data = scope === 'city' ? payload : { places: payload };

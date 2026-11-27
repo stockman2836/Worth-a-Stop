@@ -98,8 +98,11 @@ test('city discovery includes documented landmarks beyond the local radius witho
   const centre = { id: 3169070, name: 'Rome', latitude: 41.89193, longitude: 12.51133 };
   let requested;
   const fetchResponse = async url => {
+    if (url.hostname === 'download.geofabrik.de') return new Response(null, { status: 503 });
     requested = url.searchParams.get('data');
-    if (requested.includes('is_in')) return Response.json({ elements: [{ type: 'relation', id: 41485, tags: { name: 'Roma', 'name:en': 'Rome', boundary: 'administrative', admin_level: '8', 'geonames:id': '3169070' } }] });
+    if (requested.includes('is_in')) return Response.json({ elements: [{ type: 'relation', id: 41485,
+      bounds: { minlat: 41.6, minlon: 12.2, maxlat: 42.15, maxlon: 12.86 },
+      tags: { name: 'Roma', 'name:en': 'Rome', boundary: 'administrative', admin_level: '8', 'geonames:id': '3169070' } }] });
     return Response.json({ elements: [{ type: 'area', id: 3600041485 }, ...ordinary, other, ...landmarks] });
   };
   const { places, boundary } = await nearbyPlaces(centre, { scope: 'city', fetchResponse });
@@ -109,6 +112,9 @@ test('city discovery includes documented landmarks beyond the local radius witho
   assert.ok(places.find(place => place.name === 'Basilica di San Pietro').km > 4);
   assert.ok(requested.includes('rel(41485);map_to_area->.city;'));
   assert.ok(requested.includes('(area.city)'));
+  assert.ok(requested.includes('nwr(41.6,12.2,42.15,12.86)[name]->.nearby;'));
+  assert.equal(requested.split('(area.city)').length - 1, 1);
+  assert.ok(requested.includes('nwr.nearby['));
   assert.equal(boundary.url, 'https://www.openstreetmap.org/relation/41485');
   assert.ok(!requested.includes('Colosseo') && !requested.includes('Q10285'));
   const local = await nearbyPlaces(centre, { scope: 'nearby', fetchResponse });
@@ -137,5 +143,5 @@ test('city discovery includes distant places without wiki annotations and reject
 test('a missing generated area is unavailable rather than an empty city shortlist', async () => {
   const fetchResponse = async url => Response.json({ elements: url.searchParams.get('data').includes('is_in') ?
     [{ type: 'relation', id: 10, tags: { name: 'Town', boundary: 'administrative', admin_level: '8' } }] : [] });
-  await assert.rejects(nearbyPlaces({ ...city, id: 1, name: 'Town' }, { scope: 'city', fetchResponse }), { code: 'CITY_BOUNDARY_UNAVAILABLE' });
+  await assert.rejects(nearbyPlaces({ ...city, id: 1, name: 'Town' }, { scope: 'city', fetchResponse }), { code: 'PLACE_SOURCE_UNAVAILABLE' });
 });

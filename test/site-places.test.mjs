@@ -8,6 +8,7 @@ test('place API separates city identities and local searches, validates scope an
     globalThis.fetch = async (url, options) => {
       if (url.hostname === 'geocoding-api.open-meteo.com') return Response.json({id:42,name:'Missing city',feature_code:'PPL'});
       const query = url.searchParams.get('data') ?? new URLSearchParams(options.body).get('data');
+      if (query.includes('is_in(51,14)')) return new Response(null, {status:503});
       let elements;
       if (query.includes('is_in')) {
         elements = [{type:'relation',id:10,tags:{name:'Town',boundary:'administrative',admin_level:'8'}},
@@ -38,13 +39,19 @@ test('place API separates city identities and local searches, validates scope an
   const city = await (await request({ scope: 'city', id: 42, name: 'Town' })).json();
   assert.equal(city.boundary.url, 'https://www.openstreetmap.org/relation/10');
   assert.ok(city.places[0].km > 6);
+  const translated = await (await request({ scope: 'city', id: 42, name: 'Город' })).json();
+  assert.deepEqual(translated, city);
   const other = await (await request({ scope: 'city', id: 43, name: 'Other town' })).json();
   assert.equal(other.boundary.url, 'https://www.openstreetmap.org/relation/11');
   assert.equal(other.places[0].name, 'Other landmark');
   const nearby = await (await request({ scope: 'nearby' })).json();
   assert.ok(Array.isArray(nearby) && nearby[0].km < 2);
-  assert.equal((await request({ scope: 'city', id: 42, name: 'Missing city' })).status, 422);
+  assert.equal((await request({ scope: 'city', id: 44, name: 'Missing city' })).status, 422);
   for (const params of [{ scope: 'city' }, { scope: 'world' }, { radius: 6 }, { scope: 'city', id: -1, name: 'Town' }]) {
     assert.equal((await request(params)).status, 400);
   }
+  const outage = await request({ lat: 51, scope: 'city', id: 99, name: 'Town' });
+  assert.equal(outage.status, 503);
+  assert.equal(outage.headers.get('retry-after'), '60');
+  assert.equal((await outage.json()).code, 'PLACE_SOURCE_UNAVAILABLE');
 });

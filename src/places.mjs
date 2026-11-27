@@ -1,5 +1,6 @@
 import { overpassQuery } from './overpass.mjs';
-import { cityBoundary, boundaryUnavailable } from './city-boundary.mjs';
+import { cityBoundary } from './city-boundary.mjs';
+import { validExtent } from './overpass-coverage.mjs';
 
 const categories = {
   tourism: ['attraction', 'museum', 'viewpoint', 'gallery'],
@@ -28,11 +29,11 @@ function distance(lat, lon, otherLat, otherLon) {
   return 12742 * Math.asin(Math.sqrt(Math.min(1, a)));
 }
 
-export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope = 'nearby' } = {}) {
+export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope = 'nearby', resolveBoundary = cityBoundary } = {}) {
   const { latitude, longitude } = city;
   if (!validPoint(latitude, longitude)) throw Error('Invalid city centre');
   if (!['city', 'nearby'].includes(scope)) throw Error('Invalid place search scope');
-  const boundary = scope === 'city' ? await cityBoundary(city, { signal, fetchResponse }) : null;
+  const boundary = scope === 'city' ? await resolveBoundary(city, { signal, fetchResponse }) : null;
   function bounds(radius) {
     const dy = radius / 110.5;
     const dx = dy / Math.cos(latitude * Math.PI / 180);
@@ -40,11 +41,19 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
       ? [latitude - dy, longitude - dx, latitude + dy, longitude + dx].map(n => n.toFixed(5)).join(',')
       : `around:${radius * 1000},${latitude},${longitude}`;
   }
+  const box = boundary?.bounds;
+  const cityBox = validExtent(box) ? `(${box.minlat},${box.minlon},${box.maxlat},${box.maxlon})` : '';
+  const spatial = cityBox ? `nwr${cityBox}[name]->.nearby;` : '';
   const filters = Object.entries(categories).map(([tag, values]) =>
-    `nwr[${tag}~"^(${values.join('|')})$"][name](${boundary ? 'area.city' : bounds(2)});`);
-  const elements = await overpassQuery(`${boundary ? `rel(${boundary.relation});map_to_area->.city;.city out tags;` : ''}(${filters.join('')});out tags center;`, { signal, fetchResponse });
-  // A missing Overpass area is not evidence that a city has no attractions.
-  if (boundary && !elements.some(element => element.type === 'area')) throw boundaryUnavailable();
+    cityBox ? `nwr.nearby[${tag}~"^(${values.join('|')})$"];` :
+      `nwr[${tag}~"^(${values.join('|')})$"][name](${boundary ? 'area.city' : bounds(2)});`);
+  // Use the spatial index first, then apply polygon membership once to all candidates.
+  const membership = boundary && cityBox ? '->.candidates;nwr.candidates(area.city)' : '';
+  const elements = await overpassQuery(`${boundary ? `rel(${boundary.relation});map_to_area->.city;.city out tags;` : ''}${spatial}(${filters.join('')})${membership};out tags center;`, {
+    signal, fetchResponse, extent: boundary?.bounds,
+    queryTimeout: boundary ? 20 : 8,
+    accept: elements => !boundary || elements.some(element => element.type === 'area'),
+  });
   const places = [];
   for (const { type, id, lat, lon, center, tags = {} } of elements) {
     const point = center ?? { lat, lon };
@@ -64,14 +73,16 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
   }
   places.sort((a, b) => b.rank - a.rank || a.km - b.km);
   const unique = [];
+  const limit = boundary ? 24 : 12;
   const normalize = value => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().trim();
   for (const place of places) {
     const duplicate = unique.some(other => place.identity && place.identity === other.identity ||
       normalize(place.name) === normalize(other.name) &&
       distance(place.latitude, place.longitude, other.latitude, other.longitude) < .2);
     if (!duplicate) unique.push(place);
+    if (unique.length === limit) break;
   }
   // Category quotas must not displace better documented landmarks.
-  const shortlist = unique.slice(0, boundary ? 24 : 12).map(({ rank, identity, ...place }) => place);
+  const shortlist = unique.map(({ rank, identity, ...place }) => place);
   return boundary ? { places: shortlist, boundary: { name: boundary.name, url: boundary.url } } : shortlist;
 }

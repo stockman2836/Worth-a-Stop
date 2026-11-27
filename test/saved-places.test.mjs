@@ -70,6 +70,7 @@ test('requires a valid boundary for city results and distinguishes an unavailabl
     await assert.rejects(loadPlaces(city, { fetchResponse: async () => Response.json(payload) }), /Invalid places/);
   }
   await assert.rejects(loadPlaces(city, { fetchResponse: async () => new Response(null, { status: 422 }) }), { code: 'CITY_BOUNDARY_UNAVAILABLE' });
+  await assert.rejects(loadPlaces(city, { fetchResponse: async () => new Response(null, { status: 503 }) }), { code: 'PLACE_SOURCE_UNAVAILABLE' });
   const empty = await loadPlaces(city, { fetchResponse: async () => Response.json({ places: [], boundary }) });
   assert.deepEqual(empty.places, []);
 });

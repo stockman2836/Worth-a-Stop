@@ -3,7 +3,7 @@ import { createServer } from 'node:http';
 import { officialCalendars } from '../src/official-calendars.mjs';
 import { officialEvents } from '../src/official-events.mjs';
 import { validCalendarDay } from '../src/calendar-navigation.mjs';
-import { nearbyPlaces } from '../src/places.mjs';
+import { createPlaceSearch } from '../src/place-search.mjs';
 import { createWalkingRouter } from '../src/walking-router.mjs';
 
 const assets = new Map([
@@ -45,7 +45,7 @@ const assets = new Map([
   ['/guides.mjs', ['../src/guides.mjs', 'text/javascript']],
 ]);
 
-const placesCache = new Map();
+const searchPlaces = createPlaceSearch();
 const walkingRoute = createWalkingRouter();
 const server = createServer(async (request, response) => {
   if (request.method === 'GET' && request.url.startsWith('/api/walking?')) {
@@ -77,19 +77,14 @@ const server = createServer(async (request, response) => {
       response.writeHead(400).end();
       return;
     }
-    const key = [scope, scope === 'city' ? id : '', latitude, longitude, scope === 'city' ? name : ''].join('/');
-    let entry = placesCache.get(key);
-    if (!entry || entry.expires < Date.now()) {
-      if (placesCache.size >= 100) placesCache.delete(placesCache.keys().next().value);
-      entry = { promise: nearbyPlaces({ latitude, longitude, id, name }, { scope }), expires: Date.now() + 3600000 };
-      placesCache.set(key, entry);
-    }
     try {
-      const places = await entry.promise;
+      const places = await searchPlaces({ latitude, longitude, id, name }, { scope });
       response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'private, max-age=3600' }).end(JSON.stringify(places));
     } catch (error) {
-      if (placesCache.get(key) === entry) placesCache.delete(key);
-      response.writeHead(error.code === 'CITY_BOUNDARY_UNAVAILABLE' ? 422 : 502).end();
+      const boundaryMissing = error.code === 'CITY_BOUNDARY_UNAVAILABLE';
+      response.writeHead(boundaryMissing ? 422 : 503, {
+        'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(!boundaryMissing && { 'Retry-After': '60' }),
+      }).end(JSON.stringify({ code: boundaryMissing ? error.code : 'PLACE_SOURCE_UNAVAILABLE' }));
     }
     return;
   }

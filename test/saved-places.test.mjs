@@ -47,7 +47,7 @@ test('city and local searches use separate versioned cache entries and the corre
   assert.equal(calls[0].searchParams.get('scope'), 'city');
   assert.equal(calls[0].searchParams.get('id'), '42');
   assert.equal(calls[0].searchParams.get('name'), 'Town');
-  assert.equal(calls[0].searchParams.get('v'), '13');
+  assert.equal(calls[0].searchParams.get('v'), '14');
   assert.equal(calls[0].searchParams.has('radius'), false);
   await assert.rejects(loadPlaces(city, { storage: saved, scope: 'nearby', fetchResponse: unavailable }));
   await loadPlaces(city, { storage: saved, scope: 'nearby', fetchResponse });
@@ -143,11 +143,12 @@ test('legacy loading flags cannot restart polling after an unavailable response'
 
 test('verified reference evidence survives offline restoration, while mismatched source links are rejected', async () => {
   const saved = storage();
-  const referenced = { ...place, wikidata: 'Q211295', prominence: 'highlight', prominenceReasons: ['encyclopedic'],
-    reference: { url: 'https://www.wikidata.org/wiki/Q211295', wikipediaLanguages: 44, checkedAt: 1000 } };
+  const referenced = { ...place, wikidata: 'Q211295', prominence: 'highlight', prominenceReasons: ['encyclopedic'], names: { ru: 'Форум Траяна', en: "Trajan's Forum" },
+    reference: { url: 'https://www.wikidata.org/wiki/Q211295', wikipediaLanguages: 44, checkedAt: 1000, names: { ru: 'Форум Траяна', en: "Trajan's Forum" } } };
   await loadPlaces(city, { storage: saved, fetchResponse: async () => Response.json({ places: [referenced], boundary, referencesStatus: 'checked' }) });
   const offline = await loadPlaces(city, { storage: saved, fetchResponse: unavailable });
   assert.deepEqual(offline.places[0].reference, referenced.reference);
+  assert.deepEqual(offline.places[0].names, referenced.names);
   assert.equal(offline.referencesStatus, 'checked');
   await assert.rejects(loadPlaces(city, { fetchResponse: async () => Response.json({ places: [{ ...referenced,
     reference: { ...referenced.reference, url: 'https://www.wikidata.org/wiki/Q999' } }], boundary }) }), /Invalid places response/);

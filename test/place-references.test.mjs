@@ -106,3 +106,23 @@ test('city API publishes base places before reference work completes and returns
   assert.equal(final.loading, undefined); assert.equal(final.referencesStatus, 'checked');
   assert.equal(final.places[0].prominence, 'highlight');
 });
+
+test('exact entity labels fill missing RU/EN names without replacing OSM translations or borrowing a different language', async () => {
+  const source = { entities: {
+    Q211295: { ...fixture.entities.Q211295, labels: { ru: { language: 'ru', value: 'Форум Траяна' }, en: { language: 'en', value: "Trajan's Forum" } } },
+    Q1126723: { ...fixture.entities.Q1126723, labels: { ru: { language: 'en', value: 'Wrong language' }, en: { language: 'en', value: 'Villa Farnesina' } } },
+  } };
+  const output = await enrichPlaceReferences(result([
+    { ...place('Q211295'), names: { en: 'OSM English', ru: undefined } },
+    { ...place('Q1126723'), names: {} },
+  ]), { fetchResponse: async url => {
+    assert.equal(url.searchParams.get('languages'), 'ru|en');
+    assert(url.searchParams.get('props').includes('labels'));
+    return Response.json(source);
+  } });
+  const forum = output.places.find(place => place.wikidata === 'Q211295');
+  assert.deepEqual(forum.names, { ru: 'Форум Траяна', en: 'OSM English' });
+  assert.equal(forum.reference.names.ru, 'Форум Траяна');
+  const villa = output.places.find(place => place.wikidata === 'Q1126723');
+  assert.equal(villa.names.ru, undefined); assert.equal(villa.names.en, 'Villa Farnesina');
+});

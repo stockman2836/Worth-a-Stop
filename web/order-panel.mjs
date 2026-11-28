@@ -1,4 +1,5 @@
 import { compareStopOrder } from './stop-order.mjs';
+import { placeName } from './place-name.mjs';
 import { planSignature } from './alternatives.mjs';
 
 const copy = {
@@ -96,7 +97,7 @@ export function orderPanel(id, language, timeZone, getContext, apply, signal) {
       if (result.reason) { message.textContent = text.reasons[result.reason]; return; }
       message.textContent = result.applicable ? text.valid : text.unsafe;
       const { before, after } = result;
-      const name = stop => stop.names[language] || stop.title;
+      const name = stop => placeName(stop, language);
       const order = document.createElement('ol');
       order.className = 'compared-order';
       for (const visit of after.visits.filter(visit => visit.stop.type !== 'origin')) {

@@ -2,6 +2,7 @@ import { iconLabel } from './icons.mjs';
 import { placeGroup, placeSymbols } from './map-symbols.mjs';
 import { territoryLabel } from './territory.mjs';
 import { referenceLink } from './place-reference-view.mjs';
+import { placeName } from './place-name.mjs';
 
 export function placeList(language, text, getItinerary, onShow, initialPage, allPlaces = false) {
   const element = document.createElement('ul'); element.className = 'places';
@@ -28,7 +29,7 @@ export function placeList(language, text, getItinerary, onShow, initialPage, all
       const place = places[index], item = document.createElement('li'); item.dataset.placeIndex = index;
       item.classList.toggle('selected', index === selected);
       const show = document.createElement('button'); show.type = 'button'; show.className = 'show-place';
-      show.textContent = place.names[language] || place.name; show.setAttribute('aria-pressed', String(index === selected));
+      show.textContent = placeName(place, language); show.setAttribute('aria-pressed', String(index === selected));
       show.addEventListener('click', () => onShow(index));
       const link = document.createElement('a'); link.href = place.url; link.textContent = text.source;
       const info = document.createElement('span'); info.className = 'event-venue';

@@ -3,37 +3,33 @@ import { markerFace, placeGroup, placeSymbols } from './map-symbols.mjs';
 import { discoveryIndex } from './discovery-index.mjs';
 import { detailZoom, initialHighlights } from './discovery-visibility.mjs';
 import { referenceLink } from './place-reference-view.mjs';
+import { basemap } from './basemap.mjs';
 
 export function placesMap(container, city, places, labels, onSelect, view) {
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
   const restored = view && Number.isFinite(view.latitude) && Math.abs(view.latitude) <= 90 &&
     Number.isFinite(view.longitude) && Math.abs(view.longitude) <= 180 && Number.isFinite(view.zoom) && view.zoom >= 0 && view.zoom <= 19 ? view : undefined;
   // Leaflet 1.9 can complete a zoom after a replaced map has already been removed.
-  const map = L.map(container, { scrollWheelZoom: true, zoomControl: false, zoomAnimation: false,
+  const map = L.map(container, { minZoom: 1, scrollWheelZoom: true, zoomControl: false, zoomAnimation: false,
     fadeAnimation: !motion.matches, markerZoomAnimation: !motion.matches })
     .setView([restored?.latitude ?? city.latitude, restored?.longitude ?? city.longitude], restored?.zoom ?? 14);
   L.control.zoom({ zoomInTitle: labels.zoomIn, zoomOutTitle: labels.zoomOut }).addTo(map);
-  const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  }).addTo(map);
   const message = document.createElement('p');
   message.className = 'map-status';
   message.setAttribute('role', 'status');
   container.after(message);
-  let tileFailed = false;
-  tiles.on('loading', () => { tileFailed = false; });
-  tiles.on('tileerror', () => { tileFailed = true; message.textContent = labels.tilesError; });
-  tiles.on('load', () => { if (!tileFailed) message.textContent = ''; });
+  const background = basemap(map, labels.language ?? 'en', labels, message);
   const discoveryLayer = L.layerGroup().addTo(map);
   const focusLayer = L.layerGroup().addTo(map);
   let placeItems = places.map((place, index) => ({ ...place, kind: 'place', key: 'p:' + index, index }));
+  let placesByUrl = new Map(placeItems.map(place => [place.url, place]));
   let events = [], eventItems = [], states = [], eventStates = new Map(), onlyAvailable = false;
   let index = discoveryIndex([]), focused, focusMarker, clearingFocus = false, clusterPopup;
   let pending = false, destroyed = false, fitted = Boolean(restored);
   let showEvents = false;
   let indexTier = -1;
   const stateFor = item => item.kind === 'place' ? states[item.index] : eventStates.get(events[item.index]);
-  const nameFor = item => item.kind === 'place' ? labels.name(item) : item.title;
+  const nameFor = item => item.kind === 'event' || item.type === 'event' ? item.title : labels.name(placesByUrl.get(item.url) ?? item);
   const visibleItem = item => !onlyAvailable || (item.kind === 'place' ? stateFor(item)?.state === 'open' : stateFor(item)?.available);
   function popupContent(item) {
     const popup = document.createElement('div');
@@ -205,6 +201,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     setPlaces(value, refit = false) {
       clearFocus(false);
       placeItems = value.map((place, index) => ({ ...place, kind: 'place', key: 'p:' + index, index }));
+      placesByUrl = new Map(placeItems.map(place => [place.url, place]));
       if (refit) fitted = false;
       fitInitial(initialHighlights(placeItems));
       refresh();
@@ -239,12 +236,12 @@ export function placesMap(container, city, places, labels, onSelect, view) {
         points.push([stop.location.latitude, stop.location.longitude]);
         const content = document.createElement('a');
         content.href = stop.url;
-        content.textContent = stop.title;
+        content.textContent = nameFor(stop);
         const origin = stop.type === 'origin';
         const label = origin ? markerFace('flag') : String(++number);
         const icon = L.divIcon({ className: origin ? 'origin-marker draft-stop' : 'route-stop draft-stop', html: label,
           iconSize: origin ? [34, 34] : [28, 28], iconAnchor: origin ? [17, 17] : [14, 14] });
-        L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title, zIndexOffset: 1800 }).bindPopup(content).addTo(previewLayer);
+        L.marker([stop.location.latitude, stop.location.longitude], { icon, title: nameFor(stop), alt: nameFor(stop), zIndexOffset: 1800 }).bindPopup(content).addTo(previewLayer);
       }
       if (points.length) map.fitBounds(L.latLngBounds(points), { padding: [32, 32], maxZoom: 16, animate: !motion.matches });
     },
@@ -253,12 +250,12 @@ export function placesMap(container, city, places, labels, onSelect, view) {
       const content = document.createElement('div');
       const link = document.createElement('a');
       link.href = stop.url;
-      link.textContent = stop.title;
+      link.textContent = nameFor(stop);
       const hours = document.createElement('p');
       hours.textContent = stop.hours;
       content.append(link, hours);
       const icon = L.divIcon({ className: 'place-marker alternative-marker', html: markerFace('map-pin'), iconSize: [34, 34], iconAnchor: [17, 17] });
-      const marker = L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title })
+      const marker = L.marker([stop.location.latitude, stop.location.longitude], { icon, title: nameFor(stop), alt: nameFor(stop) })
         .bindPopup(content).addTo(previewLayer);
       map.setView(marker.getLatLng(), 16, { animate: !motion.matches });
       marker.openPopup();
@@ -274,10 +271,10 @@ export function placesMap(container, city, places, labels, onSelect, view) {
         if (!stop.location || stop.type === 'origin') continue;
         const popup = document.createElement('a');
         popup.href = stop.url;
-        popup.textContent = stop.title;
+        popup.textContent = nameFor(stop);
         const offset = stops[0]?.type === 'origin' ? 1 : 0;
         const icon = L.divIcon({ className: 'route-stop', html: String(index + 1 - offset), iconSize: [28, 28], iconAnchor: [14, 14] });
-        L.marker([stop.location.latitude, stop.location.longitude], { icon, title: stop.title, alt: stop.title, zIndexOffset: 1500 })
+        L.marker([stop.location.latitude, stop.location.longitude], { icon, title: nameFor(stop), alt: nameFor(stop), zIndexOffset: 1500 })
           .bindPopup(popup).addTo(routeLayer);
       }
       const points = legs.filter(leg => leg.status === 'ok').flatMap(leg => leg.geometry.coordinates.map(([lon, lat]) => [lat, lon]));
@@ -303,6 +300,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     destroy() {
       if (destroyed) return;
       destroyed = true; resize.disconnect();
+      background.destroy();
       map.off('moveend', moved); container.removeEventListener('keydown', keydown);
       // Leaflet 1.9 removes the wheel listener but leaves its debounced zoom
       // scheduled. Cancel it before remove() deletes the map pane.

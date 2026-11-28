@@ -1,4 +1,5 @@
 import { itineraryStop, itineraryStore } from './itinerary.mjs';
+import { placeName } from './place-name.mjs';
 import { nextDate, todayIn } from './day-agenda.mjs';
 import { walkingPanel } from './walking-panel.mjs';
 import { arrivalTimes } from './arrival-times.mjs';
@@ -167,6 +168,9 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
   settings.append(settingsTitle, originControls, originStatus, zone);
   element.append(title, label, startLabel, endLabel, emptyState, settings, timingStatus, windowStatus, list, status);
   let currentStops = [];
+  let placeNames = new Map();
+  const nameLinks = new Map();
+  const nameFor = stop => placeName(stop.type === 'event' ? stop : { ...stop, names: { ...stop.names, ...placeNames.get(stop.url) } }, language);
   let routeLegs = [];
   let replacementController;
   let alternativePanels = [];
@@ -282,11 +286,13 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
     timeline.setOrigin(origin);
     showOriginStatus();
     list.replaceChildren();
+    nameLinks.clear();
     for (const [index, stop] of result.stops.entries()) {
       const item = document.createElement('li');
       const link = document.createElement('a');
       link.href = stop.url;
-      link.textContent = stop.names?.[language] || stop.title;
+      link.textContent = nameFor(stop);
+      nameLinks.set(stop.id, { link, stop });
       item.append(link);
       if (stop.territory) {
         const territory = document.createElement('a'); territory.className = 'place-territory';
@@ -383,6 +389,12 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
     controls: { date: label, start: startLabel, end: endLabel },
     mapButton: walking.mapButton,
     context,
+    setPlaceNames(places) {
+      placeNames = new Map(places.map(place => [place.url, Object.fromEntries(Object.entries(place.names ?? {})
+        .filter(([, value]) => typeof value === 'string' && value.trim()))]));
+      for (const { link, stop } of nameLinks.values()) link.textContent = nameFor(stop);
+      walking.setNameResolver(nameFor);
+    },
     onChange(listener) { listeners.add(listener); },
     applyPlan(stops, expected) {
       if (JSON.stringify(context()) !== JSON.stringify(expected) || readTime('start') !== startInput.value ||
@@ -400,7 +412,7 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
       add.className = 'add-to-plan';
       iconLabel(add, 'plus', text.add);
       add.prepend(icon('check'));
-      add.setAttribute('aria-label', text.add + ' · ' + (item.title || item.names?.[language] || item.name));
+      add.setAttribute('aria-label', text.add + ' · ' + nameFor(item));
       return add;
     },
   };

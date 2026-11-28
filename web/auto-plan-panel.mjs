@@ -1,4 +1,5 @@
 import { generateDayPlan } from './auto-plan.mjs';
+import { placeName } from './place-name.mjs';
 import { loadPlanCandidates } from './plan-candidates.mjs';
 import { localInstant } from './opening-hours.mjs';
 import { withStartingPoint } from './starting-point.mjs';
@@ -126,7 +127,7 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
       for (const entry of result.entries) {
         const item = document.createElement('li');
         const time = document.createElement('span'); time.className = 'event-time'; time.textContent = clock.format(entry.stop.type === 'event' ? entry.stop.start : entry.arrival) + '–' + clock.format(entry.departure);
-        const link = document.createElement('a'); link.href = entry.stop.url; link.textContent = entry.stop.names?.[language] || entry.stop.title;
+        const link = document.createElement('a'); link.href = entry.stop.url; link.textContent = placeName(entry.stop, language);
         const reason = document.createElement('p');
         reason.dataset.hours = entry.hours;
         reason.textContent = [entry.hours === 'event' ? text.event : entry.hours === 'fits' ? text.verified : text.unknown,

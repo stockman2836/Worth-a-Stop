@@ -7,10 +7,12 @@ import { iconLabel } from './icons.mjs';
 import { updateLegend } from './map-symbols.mjs';
 import { placeList } from './place-list.mjs';
 import { territoryLabel } from './territory.mjs';
+import { placeName } from './place-name.mjs';
 
 const copy = {
   ru: { moreLoading: 'Загружаем остальные районы… Найденные места уже можно смотреть.', partial: 'Часть районов пока недоступна. Загруженные места показаны; повторите через минуту.', title: 'Места города', loading: 'Ищем границу города и интересные места…', empty: 'В границах города подходящих мест не найдено.',
     referenceLanguages: 'Языков Википедии', referencesLoading: 'Проверяем справочные данные… Места уже можно смотреть.', referencesPartial: 'Справочные данные проверены частично. Базовая подборка сохранена.', referencesUnavailable: 'Дополнительные справочные данные сейчас недоступны. Показана подборка по данным карты.',
+    language: 'ru', mapLoading: 'Загружаем карту…', mapFallback: 'Локализованная подложка недоступна. Показана стандартная карта с местными названиями.', nameReference: 'Название из Wikidata',
     surroundings: 'В контуре поселения мест не найдено. Показаны окрестности в пределах 2 км от центра.', settlement: 'Контур поселения', cityState: 'Город-государство',
     scope: 'Места по всему городу', boundary: 'Граница поиска', boundaryError: 'Не удалось подтвердить границу выбранного города. Поиск по всему городу недоступен.', sourceError: 'Источники мест временно недоступны. Попробуйте снова через минуту.', error: 'Не удалось загрузить места.', retry: 'Попробовать снова',
     pages: 'Страницы мест', previous: 'Назад', next: 'Дальше', pageRange: (first, last, total) => `Показаны ${first}–${last} из ${total}`,
@@ -39,6 +41,7 @@ const copy = {
     filtered: (places, events) => `Доступно мест — ${places}, событий — ${events}. Неизвестное расписание скрыто.` },
   en: { moreLoading: 'Loading the remaining areas… You can already explore the places found.', partial: 'Some areas are temporarily unavailable. Showing loaded places; try again in a minute.', title: 'City places', loading: 'Looking for the city boundary and places…', empty: 'No matching places within the city boundary.',
     referenceLanguages: 'Wikipedia languages', referencesLoading: 'Checking reference data… You can already explore the places.', referencesPartial: 'Reference data was checked partially. The base selection is retained.', referencesUnavailable: 'Additional reference data is temporarily unavailable. Showing the selection based on map data.',
+    language: 'en', mapLoading: 'Loading the map…', mapFallback: 'Localized basemap unavailable. Showing the standard map with local names.', nameReference: 'Name from Wikidata',
     surroundings: 'No matching places in the settlement footprint. Showing surroundings within 2 km of the centre.', settlement: 'Settlement boundary', cityState: 'City-state boundary',
     scope: 'Places across the city', boundary: 'Search boundary', boundaryError: 'Could not confirm the selected city boundary. Citywide search is unavailable.', sourceError: 'Place sources are temporarily unavailable. Try again in a minute.', error: 'Could not load places.', retry: 'Try again',
     pages: 'Place pages', previous: 'Previous', next: 'Next', pageRange: (first, last, total) => `Showing ${first}–${last} of ${total}`,
@@ -197,7 +200,7 @@ export function placesPanel(city, language, signal, open, selection) {
   function ensureMap() {
     if (map || !details.open || signal.aborted) return;
     mapBox.hidden = false;
-    map = placesMap(mapBox, city, [], { ...text, name: place => place.names[language] || place.name,
+    map = placesMap(mapBox, city, [], { ...text, name: place => placeName(place, language),
       territory: value => territoryLabel(value, language) }, index => listView.select(index), selection?.mapView);
     map.setEvents(events);
     map.setEventsVisible(eventToggle.checked);
@@ -261,13 +264,14 @@ export function placesPanel(city, language, signal, open, selection) {
         listView.select(index);
       }
       if (map) map.setPlaces(places, hostArrived);
-      else map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name,
+      else map = placesMap(mapBox, city, places, { ...text, name: place => placeName(place, language),
         territory: value => territoryLabel(value, language) }, select, selection?.mapView);
       map.setEvents(events);
       map.setEventsVisible(eventToggle.checked);
       map.setRoute(route.legs, route.stops, route.focused);
       configureOrigin();
       loadedPlaces = places;
+      itinerary?.setPlaceNames(places);
       updateLegend(legend, places, text);
       updateHours();
       if (selectedEvent && events.includes(selectedEvent)) map.selectEvent(selectedEvent);
@@ -332,7 +336,7 @@ export function placesPanel(city, language, signal, open, selection) {
     },
     clearAlternative() { alternative = undefined; map?.clearPreview(); },
     showAlternative(stop) {
-      alternative = { ...stop, title: stop.names[language] || stop.title };
+      alternative = { ...stop, title: placeName(stop, language) };
       route.focused = false;
       details.open = true;
       ensureMap();

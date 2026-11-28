@@ -1,4 +1,5 @@
 import { findAlternatives, planSignature } from './alternatives.mjs';
+import { placeName } from './place-name.mjs';
 
 const copy = {
   ru: { title: 'Найти замену', searching: 'Проверяем ближайшие места и переходы…',
@@ -70,7 +71,7 @@ export function alternativesPanel(stop, language, timeZone, getContext, apply, t
         const item = document.createElement('li');
         const title = document.createElement('a');
         title.href = alternative.stop.url;
-        title.textContent = alternative.stop.names[language] || alternative.stop.title;
+        title.textContent = placeName(alternative.stop, language);
         const info = document.createElement('p');
         info.textContent = [distance.format(alternative.km * 1000), text.visit + ' · ' + when.format(alternative.arrival) +
           ' – ' + when.format(alternative.departure), text.hours + ' · ' + alternative.stop.hours].join(' · ');

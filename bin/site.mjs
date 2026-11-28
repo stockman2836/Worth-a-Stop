@@ -9,6 +9,18 @@ import { fileURLToPath } from 'node:url';
 import { createWalkingRouter } from '../src/walking-router.mjs';
 
 const assets = new Map([
+  ['/place-name.mjs', ['../src/place-name.mjs', 'text/javascript']],
+  ['/basemap.mjs', ['../web/basemap.mjs', 'text/javascript']],
+  ['/map-style.mjs', ['../src/map-style.mjs', 'text/javascript']],
+  ['/maplibre-gl.mjs', ['../node_modules/maplibre-gl/dist/maplibre-gl.mjs', 'text/javascript']],
+  ['/maplibre-gl.mjs.map', ['../node_modules/maplibre-gl/dist/maplibre-gl.mjs.map', 'application/json']],
+  ['/maplibre-gl-shared.mjs', ['../node_modules/maplibre-gl/dist/maplibre-gl-shared.mjs', 'text/javascript']],
+  ['/maplibre-gl-worker.mjs', ['../node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs', 'text/javascript']],
+  ['/maplibre-gl-worker.mjs.map', ['../node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs.map', 'application/json']],
+  ['/maplibre-gl.css', ['../node_modules/maplibre-gl/dist/maplibre-gl.css', 'text/css']],
+  ['/maplibre-gl.LICENSE.txt', ['../node_modules/maplibre-gl/LICENSE.txt', 'text/plain']],
+  ['/leaflet-maplibre-gl.LICENSE.txt', ['../node_modules/@maplibre/maplibre-gl-leaflet/LICENSE', 'text/plain']],
+  ['/leaflet-maplibre-gl.mjs', ['../node_modules/@maplibre/maplibre-gl-leaflet/dist/leaflet-maplibre-gl.mjs', 'text/javascript']],
   ['/place-reference.mjs', ['../src/place-reference.mjs', 'text/javascript']],
   ['/place-reference-view.mjs', ['../web/place-reference-view.mjs', 'text/javascript']],
   ['/territory.mjs', ['../src/territory.mjs', 'text/javascript']],

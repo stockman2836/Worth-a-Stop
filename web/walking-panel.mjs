@@ -1,4 +1,5 @@
 import { walkingLegs } from './walking-legs.mjs';
+import { placeName } from './place-name.mjs';
 import { iconLabel } from './icons.mjs';
 
 const copy = {
@@ -45,13 +46,15 @@ export function walkingPanel(language, timeline, signal, onRoutes = () => {}) {
   let signature;
   let controller;
   let stops = [];
+  let nameFor = stop => placeName(stop, language), currentLegs = [], currentLoading = false;
   function distance(value) { return value < 1000 ? metres.format(value) : kilometres.format(value / 1000); }
   function render(legs, loading) {
+    currentLegs = legs; currentLoading = loading;
     list.replaceChildren();
     for (const leg of legs) {
       const item = document.createElement('li');
       const title = document.createElement('span');
-      title.textContent = leg.from.title + ' — ' + leg.to.title;
+      title.textContent = nameFor(leg.from) + ' — ' + nameFor(leg.to);
       const info = document.createElement('p');
       info.textContent = leg.status === 'ok' ? distance(leg.distance) + ' · ' + text.estimate + ' ' + minutes.format(Math.ceil(leg.duration / 60))
         : leg.status === 'missing-location' ? text.missing : leg.status === 'no-route' ? text.noRoute : text.error;
@@ -82,6 +85,7 @@ export function walkingPanel(language, timeline, signal, onRoutes = () => {}) {
   return {
     element,
     mapButton: show,
+    setNameResolver(resolve) { nameFor = resolve; render(currentLegs, currentLoading); },
     update(value) {
       const next = JSON.stringify(value.map(stop => [stop.id, stop.location]));
       if (signature === next) return;

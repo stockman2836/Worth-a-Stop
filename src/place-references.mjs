@@ -26,7 +26,7 @@ export async function enrichPlaceReferences(result, { signal, fetchResponse = fe
   let next = 0;
   async function worker() {
     while (next < batches.length && !taskSignal.aborted) {
-      const batch = batches[next++], key = 'place-references-v1/' + batch.join('|');
+      const batch = batches[next++], key = 'place-references-v2/' + batch.join('|');
       try {
         const saved = await queryCache?.get(key).catch(() => undefined);
         let values = saved?.expires > now() && Array.isArray(saved.value) && saved.value.length > 0 && saved.value.length <= batch.length &&
@@ -35,7 +35,7 @@ export async function enrichPlaceReferences(result, { signal, fetchResponse = fe
         if (!values) {
           taskSignal.throwIfAborted();
           const url = new URL('https://www.wikidata.org/w/api.php');
-          url.search = new URLSearchParams({ action: 'wbgetentities', ids: batch.join('|'), props: 'sitelinks', format: 'json' });
+          url.search = new URLSearchParams({ action: 'wbgetentities', ids: batch.join('|'), props: 'sitelinks|labels', languages: 'ru|en', format: 'json' });
           const response = await fetchResponse(url, { signal: taskSignal,
             headers: { 'User-Agent': 'Worth-a-Stop/0.1 (travel place references)' } });
           if (!response.ok) throw Error('Wikidata unavailable');
@@ -45,7 +45,12 @@ export async function enrichPlaceReferences(result, { signal, fetchResponse = fe
             const entity = data.entities[id];
             if (entity?.id !== id || entity.missing !== undefined) return [];
             try {
-              return [[id, { url: `https://www.wikidata.org/wiki/${id}`, wikipediaLanguages: wikipediaLanguages(entity.sitelinks), checkedAt: now() }]];
+              const names = {};
+              for (const language of ['ru', 'en']) {
+                const label = entity.labels?.[language];
+                if (label?.language === language && typeof label.value === 'string' && label.value.trim() && label.value.length <= 500 && label.value !== id) names[language] = label.value.trim();
+              }
+              return [[id, { url: `https://www.wikidata.org/wiki/${id}`, wikipediaLanguages: wikipediaLanguages(entity.sitelinks), checkedAt: now(), ...(Object.keys(names).length && { names }) }]];
             } catch { return []; }
           });
           taskSignal.throwIfAborted();
@@ -63,7 +68,9 @@ export async function enrichPlaceReferences(result, { signal, fetchResponse = fe
     // Broad encyclopedic coverage corroborates prominence; lack of it never
     // demotes an existing highlight. This is a threshold, not a city quota.
     const promoted = reference.wikipediaLanguages >= 30;
-    return { ...place, reference, ...(promoted && { prominence: 'highlight',
+    const names = { ...place.names };
+    for (const language of ['ru', 'en']) if (!(typeof names[language] === 'string' && names[language].trim()) && reference.names?.[language]) names[language] = reference.names[language];
+    return { ...place, names, reference, ...(promoted && { prominence: 'highlight',
       prominenceReasons: [...new Set([...(place.prominenceReasons ?? []), 'encyclopedic'])] }) };
   }).sort((a, b) => (order[a.prominence] ?? 2) - (order[b.prominence] ?? 2));
   return { ...result, places, referencesStatus: references.size === ids.length ? 'checked' : references.size ? 'partial' : 'unavailable' };

@@ -17,6 +17,7 @@ export function itineraryStop(item, type) {
   return { id: JSON.stringify([type, url.href, start]), type, title, url: url.href,
     names: item.names || {}, venue: item.venue || null, start, end, duration: null,
     hours: type === 'place' && typeof item.hours === 'string' ? item.hours : null, ...(location && { location }),
+    ...(type === 'place' && item.required === true && { required: true }),
     ...(type === 'place' && validTerritory(item.territory) && { territory: item.territory }) };
 }
 
@@ -68,6 +69,7 @@ export function itineraryStore(cityId, storage) {
       if (new Set(stops.map(stop => stop.id)).size !== stops.length) throw Error('Duplicate proposed stops');
       return change(day, current => {
         if (JSON.stringify(current) !== JSON.stringify(expected)) throw Error('Plan changed');
+        if (current.some(stop => stop.required && !stops.some(next => next.id === stop.id && next.required))) throw Error('Required stop missing');
         return stops;
       });
     },
@@ -82,9 +84,19 @@ export function itineraryStore(cityId, storage) {
       return change(day, stops => {
         if (JSON.stringify(stops) !== JSON.stringify(expected)) throw Error('Plan changed');
         const index = stops.findIndex(stop => stop.id === id);
-        if (index < 0 || stops[index].type !== 'place' || replacement.type !== 'place' ||
+        if (index < 0 || stops[index].type !== 'place' || stops[index].required || replacement.type !== 'place' ||
             stops.some(stop => stop.id === replacement.id)) throw Error('Invalid replacement');
         stops[index] = { ...itineraryStop(replacement, 'place'), duration: stops[index].duration };
+        return stops;
+      });
+    },
+    require(day, id, value) {
+      if (typeof value !== 'boolean') throw Error('Invalid required flag');
+      return change(day, stops => {
+        const stop = stops.find(stop => stop.id === id);
+        if (!stop || stop.type !== 'place') throw Error('Invalid required stop');
+        if (value) stop.required = true;
+        else delete stop.required;
         return stops;
       });
     },

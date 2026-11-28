@@ -11,6 +11,7 @@ export function planSignature(stops, start, legs) {
 export async function findAlternatives(stops, id, legs, start, timeZone, { signal, fetchResponse = fetch, storage } = {}) {
   const index = stops.findIndex(stop => stop.id === id);
   const original = stops[index];
+  if (original?.required) return { reason: 'required', alternatives: [] };
   if (!original || original.type !== 'place' || !original.location) return { reason: 'location', alternatives: [] };
   if (!Number.isInteger(original.duration) || original.duration < 1) return { reason: 'duration', alternatives: [] };
   const baseline = arrivalTimes(stops, legs, start);
@@ -42,6 +43,8 @@ export async function findAlternatives(stops, id, legs, start, timeZone, { signa
     if (trial.some((stop, i) => stop.type === 'pause' && (times[i].arrival === null || times[i].reason || times[i].late > 0))) continue;
     if (trial.some((stop, i) => stop.mealVenue &&
         visitOpeningState(stop.hours, times[i].visitStart, times[i].departure, timeZone).state !== 'fits')) continue;
+    if (trial.some((stop, i) => stop.required &&
+        !['fits', 'unknown'].includes(visitOpeningState(stop.hours, times[i].arrival, times[i].departure, timeZone).state))) continue;
     alternatives.push({ stop: replacement, km: place.km, arrival: visit.arrival, departure: visit.departure });
   }
   return { alternatives, stale, incomplete };

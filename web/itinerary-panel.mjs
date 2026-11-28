@@ -16,6 +16,7 @@ import { withTripEndpoints } from './return-trip.mjs';
 
 const copy = {
   ru: { title: 'План дня', date: 'Дата плана', add: 'Добавить в план', empty: 'Добавьте места и события из подборки.',
+    required: 'Обязательно посетить', requiredHint: 'Автоплан сохранит это место. Чтобы предложить замену, сначала сними закрепление.',
     pauseMinutes: 'Длительность паузы, мин', pauseStart: 'Начало паузы', pauseLate: 'Окончание позже окна на',
     pauseNote: 'Резерв времени рядом с отмеченной точкой. Место для паузы не подобрано; поиск и дополнительные переходы не рассчитаны.',
     pauseWindow: 'Окно паузы',
@@ -53,6 +54,7 @@ const copy = {
       'event-time': 'Время начала события неизвестно.', 'event-end': 'Время окончания события неизвестно.',
       'event-ended': 'Событие закончится до прибытия. Проверьте план.' } },
   en: { title: 'Daily itinerary', date: 'Plan date', add: 'Add to plan', empty: 'Add places and events from the suggestions.',
+    required: 'Must visit', requiredHint: 'Auto planning will keep this place. Unpin it first to suggest a replacement.',
     pauseMinutes: 'Break duration, min', pauseStart: 'Break starts', pauseLate: 'Break ends beyond its window by',
     pauseNote: 'Time reserved near the marked point. No venue is selected; finding one and extra walking are not calculated.',
     pauseWindow: 'Break window',
@@ -319,6 +321,18 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
       link.textContent = nameFor(stop);
       nameLinks.set(stop.id, { link, stop });
       item.append(link);
+      if (stop.type === 'place') {
+        const label = document.createElement('label'); label.className = 'required-stop-toggle';
+        const input = document.createElement('input'); input.type = 'checkbox'; input.checked = stop.required === true;
+        input.setAttribute('aria-label', text.required + ' · ' + nameFor(stop));
+        label.append(input, icon('flag'), document.createTextNode(text.required));
+        label.title = text.requiredHint;
+        input.addEventListener('change', () => {
+          render(store.require(activeDay, stop.id, input.checked));
+          list.children[index]?.querySelector('.required-stop-toggle input')?.focus({ preventScroll: true });
+        });
+        item.append(label);
+      }
       if (stop.territory) {
         const territory = document.createElement('a'); territory.className = 'place-territory';
         territory.href = stop.territory.url; territory.textContent = territoryLabel(stop.territory, language);
@@ -361,7 +375,7 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
           render(store.duration(activeDay, stop.id, input.value ? Number(input.value) : null));
         });
         item.append(label);
-        if (stop.type === 'place') {
+        if (stop.type === 'place' && !stop.required) {
           const alternatives = alternativesPanel(stop, language, city.timezone, replacementContext,
             (context, id, replacement) => {
               if (context.day !== activeDay || readStart() !== startInput.value) throw Error('Plan changed');

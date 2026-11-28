@@ -530,6 +530,10 @@ footer { border-top: 1px solid var(--line); font-size: .75rem; opacity: .9; }
 .auto-plan-stops a { font-size: .85rem; font-weight: 600; text-decoration: none; }
 .auto-plan-stops p { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: .7rem; line-height: 1.7; }
 .auto-plan-stops p[data-hours="unknown"] { color: var(--warning); }
+.required-stops-note { flex-basis: 100%; margin: 0; color: var(--muted); font-size: .8rem; line-height: 1.7; }
+.required-stop-toggle { display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; color: var(--secondary); font-size: .8rem; }
+.required-stop-toggle:has(input:checked) { color: var(--accent); }
+.required-stop-toggle input { accent-color: var(--accent); }
 .auto-plan-preview button { font: inherit; font-size: .75rem; color: var(--secondary); background: var(--surface-soft); border: 1px solid var(--line-strong); border-radius: .5rem; padding: .6rem .7rem; }
 .auto-plan-preview .apply-auto-plan { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .auto-plan-preview [aria-busy="true"]::before { content: ''; display: inline-block; width: .45rem; height: .45rem; border-radius: 50%; background: var(--accent); margin-right: .5rem; animation: plan-pulse 1s ease-in-out infinite alternate; }

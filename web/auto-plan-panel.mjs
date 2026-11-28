@@ -11,6 +11,19 @@ import { mealOptionsPanel } from './meal-options-panel.mjs';
 
 const copy = {
   ru: { pace: 'Темп прогулки', paces: { relaxed: 'Спокойный', balanced: 'Обычный', active: 'Насыщенный' },
+    requiredHint: 'Добавь места в план дня и отметь «Обязательно посетить». Автоплан сохранит их и подберёт остальные остановки.',
+    requiredCount: n => `Обязательных мест: ${n}. Порядок подберёт автоплан; заданная длительность посещений сохранится.`,
+    requiredBadge: 'Обязательно посетить',
+    requiredConflict: 'Не удалось подтвердить маршрут через все обязательные места. Текущий план сохранён.',
+    requiredReasons: { location: 'Нет координат для расчёта перехода.', route: 'Не удалось подтвердить пеший переход. Попробуй позже или измени точку старта.',
+      'walk-limit': 'Переход превышает лимит выбранного темпа. Измени темп или точку старта.',
+      'closed-arrival': 'В проверенном варианте место закрыто к прибытию. Попробуй другое время начала прогулки.',
+      'closes-during': 'В проверенном варианте место закрывается до окончания посещения. Измени время или длительность.',
+      break: 'В проверенном варианте посещение пересекает перерыв. Измени время или длительность.',
+      'unknown-time': 'Не удалось проверить время посещения.', time: 'В проверенном варианте не хватает времени на посещения. Увеличь окно прогулки или сократи длительность.',
+      return: 'В проверенном варианте не успеть к сроку возвращения с запасом. Измени время или точку возвращения.',
+      pause: 'В проверенном варианте не помещается обязательная пауза. Измени её окно или длительность.',
+      'search-limit': 'Достигнут лимит проверки вариантов; это не означает, что маршрут невозможен. Попробуй другую точку старта или окно времени.' },
     pauseInvalid: 'Пауза должна целиком помещаться в выбранное окно и оставлять время до окончания прогулки или возвращения.',
     pauseEmpty: 'Не удалось собрать прогулку с паузой в указанное время и соблюдением срока возвращения. Измени окно, длительность или время поездки.',
     pauseNote: 'Пауза — резерв времени рядом с отмеченной точкой. Заведение, его часы работы, поиск и дополнительные переходы не проверены.',
@@ -43,6 +56,19 @@ const copy = {
     skipped: 'Некоторые события пропущены: неподходящее время, отсутствие данных или недоступный сеанс.',
     map: 'Предложение на карте', mapHint: 'Пунктир и оранжевые номера на карте — предлагаемый маршрут.', stops: 'Остановки предложения' },
   en: { pace: 'Walking pace', paces: { relaxed: 'Relaxed', balanced: 'Balanced', active: 'Active' },
+    requiredHint: 'Add places to the daily itinerary and mark them Must visit. Auto planning keeps them and suggests other stops.',
+    requiredCount: n => `Must-visit places: ${n}. Auto planning chooses their order and preserves your visit durations.`,
+    requiredBadge: 'Must visit',
+    requiredConflict: 'Could not confirm a route through every must-visit place. Your current itinerary is preserved.',
+    requiredReasons: { location: 'Coordinates are missing for a walking route.', route: 'The walking route could not be verified. Try later or change the starting point.',
+      'walk-limit': 'A walk exceeds the selected pace limit. Change the pace or starting point.',
+      'closed-arrival': 'The place is closed on arrival in the checked option. Try a different walking start time.',
+      'closes-during': 'The place closes before the visit ends in the checked option. Change the time or duration.',
+      break: 'The visit crosses a closure in the checked option. Change the time or duration.',
+      'unknown-time': 'The visit time could not be checked.', time: 'The checked option leaves too little time for visits. Extend the day or reduce visit durations.',
+      return: 'The checked option misses the return deadline including the buffer. Change the return time or point.',
+      pause: 'The required break does not fit the checked option. Change its window or duration.',
+      'search-limit': 'The search reached its check limit; this does not mean the route is impossible. Try another starting point or time window.' },
     pauseInvalid: 'The entire break must fit its window and leave time before the walk ends or the required return.',
     pauseEmpty: 'No walk fits the requested break and return deadline. Change the break window, duration or trip times.',
     pauseNote: 'The break reserves time at the marked point. A venue, its opening hours, the search and any extra walking are not verified.',
@@ -112,8 +138,14 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
     resetInterests.disabled = !getInterests().length;
   }
   showInterestNote();
+  const requiredNote = document.createElement('p'); requiredNote.className = 'required-stops-note';
+  function showRequiredNote() {
+    const count = itinerary.context().stops.filter(stop => stop.type === 'place' && stop.required).length;
+    requiredNote.textContent = [text.requiredHint, count && text.requiredCount(count)].filter(Boolean).join(' ');
+  }
+  showRequiredNote();
   const pause = pauseControls(city, language, storage, signal, () => itinerary.context().day, invalidate);
-  controls.append(interestsBox, pause.element, paceLabel, run, cancel);
+  controls.append(interestsBox, requiredNote, pause.element, paceLabel, run, cancel);
   const element = document.createElement('section'); element.className = 'auto-plan-preview'; element.hidden = true;
   const heading = document.createElement('h2'); heading.textContent = text.title;
   const message = document.createElement('p'); message.setAttribute('role', 'status');
@@ -143,7 +175,7 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
     if (!signature || fingerprint() === signature) return;
     clear(); element.hidden = false; message.textContent = text.changed;
   }
-  itinerary.onChange(() => { pause.refreshDay(); invalidate(); });
+  itinerary.onChange(() => { pause.refreshDay(); showRequiredNote(); invalidate(); });
   function changeInterests() { preferences = saveInterests(getInterests(), storage); showInterestNote(); invalidate(); }
   for (const input of checkboxes.values()) input.addEventListener('change', changeInterests);
   resetInterests.addEventListener('click', () => { for (const input of checkboxes.values()) input.checked = false; changeInterests(); });
@@ -184,13 +216,21 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
     run.disabled = true; cancel.hidden = false; message.textContent = text.gathering; message.setAttribute('aria-busy', 'true');
     try {
       const candidates = await loadPlanCandidates(city, context.day, { signal: combined, storage });
-      const result = await generateDayPlan({ ...context, timeZone: city.timezone, pace: pace.value, interests, pause: pauseSettings, ...candidates }, {
+      const result = await generateDayPlan({ ...context, timeZone: city.timezone, pace: pace.value, interests, pause: pauseSettings,
+        ...candidates, required: context.stops.filter(stop => stop.type === 'place' && stop.required) }, {
         signal: combined, onProgress: progress => { if (active === controller) message.textContent = text.checking(progress.stops); },
       });
       if (active !== controller || signal.aborted) return;
       if (signature !== fingerprint()) { invalidate(); return; }
       renderSuggestion = result => {
         proposal = result; list.replaceChildren();
+        if (result.requiredConflict) {
+          const { code, stop } = result.requiredConflict;
+          message.textContent = text.requiredConflict;
+          note.textContent = [stop && (stop.type === 'return' ? text.returnTitle : placeName(stop, language)), text.requiredReasons[code],
+            (candidates.incomplete || result.failedRoutes || result.limited) && text.partial].filter(Boolean).join(' ');
+          return;
+        }
         if (!result.stops.length) {
           message.textContent = pauseSettings ? text.pauseEmpty : context.returnTrip ? text.returnEmpty : text.empty;
           note.textContent = [(candidates.incomplete || result.failedRoutes || result.limited) && text.partial, result.skippedEvents > 0 && text.skipped].filter(Boolean).join(' ');
@@ -210,6 +250,7 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
           const reason = document.createElement('p');
           reason.dataset.hours = entry.hours;
           reason.textContent = [entry.hours === 'pause' ? text.pauseDuration(entry.stop.duration) : entry.hours === 'event' ? text.event : entry.hours === 'fits' ? text.verified : text.unknown,
+            entry.stop.required && text.requiredBadge,
             entry.stop.mealVenue && (entry.venueHours === 'fits' ? text.verified : text.unknown),
             entry.stop.type === 'place' && text.duration(entry.stop.duration), entry.walkingMinutes > 0 && text.walk(entry.walkingMinutes),
             entry.waiting > 0 && text.arrive(clock.format(entry.arrival)), entry.waiting > 0 && text.wait(entry.waiting),
@@ -228,7 +269,7 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
         iconLabel(run, 'sparkles', text.again);
       };
       renderSuggestion(result);
-      meals.start(result, { origin: context.origin, returnTrip: context.returnTrip, timeZone: city.timezone });
+      if (!result.requiredConflict) meals.start(result, { origin: context.origin, returnTrip: context.returnTrip, timeZone: city.timezone });
     } catch (error) {
       if (active !== controller || signal.aborted) return;
       message.textContent = error.name === 'TimeoutError' ? text.timeout : text.error;

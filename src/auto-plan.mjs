@@ -7,6 +7,7 @@ import { eventLocation } from './event-location.mjs';
 import { interestIds, normalizeInterests, matchingInterests, shortlistPlaces } from './travel-interests.mjs';
 import { validReturnTrip, returnStop } from './return-trip.mjs';
 import { pauseWindow, plannedPause } from './planned-pause.mjs';
+import { planRequiredVisits } from './required-plan.mjs';
 
 const paces = { relaxed: { factor: 1.3, stops: 4, walk: 25 }, balanced: { factor: 1, stops: 6, walk: 35 }, active: { factor: .8, stops: 8, walk: 45 } };
 const visits = { museum: 75, gallery: 50, cathedral: 40, castle: 60, park: 35, garden: 35, viewpoint: 20, marketplace: 30 };
@@ -19,12 +20,12 @@ function distance(a, b) {
   return 12742 * Math.asin(Math.sqrt(Math.min(1, h)));
 }
 
-export async function generateDayPlan({ day, startTime, endTime, timeZone, pace = 'balanced', interests = [], origin = null, returnTrip = null, pause = null, places = [], events = [] },
+export async function generateDayPlan({ day, startTime, endTime, timeZone, pace = 'balanced', interests = [], origin = null, returnTrip = null, pause = null, required = [], places = [], events = [] },
   { signal, fetchResponse = fetch, onProgress = () => {} } = {}) {
   const start = timeZone && localInstant(day, startTime, timeZone);
   const end = timeZone && localInstant(day, endTime, timeZone);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !Object.hasOwn(paces, pace) ||
-      !Array.isArray(interests) || interests.some(id => !interestIds.includes(id)) ||
+      !Array.isArray(interests) || interests.some(id => !interestIds.includes(id)) || !Array.isArray(required) ||
       !validReturnTrip(returnTrip) || origin !== null && !eventLocation(origin?.latitude, origin?.longitude)) throw Error('Invalid planning options');
   const returnDeadline = returnTrip ? end - returnTrip.bufferMinutes * 60000 : end;
   if (returnDeadline <= start) throw Error('Invalid planning options');
@@ -35,6 +36,16 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
   interests = normalizeInterests(interests);
   const candidates = [], ids = new Set();
   let skippedEvents = 0;
+  for (const item of required) {
+    if (item.type !== 'place') throw Error('Invalid required stop');
+    const source = places.find(place => place.url === item.url);
+    const stop = itineraryStop({ ...item, ...(source && { hours: source.hours, names: source.names }), required: true }, 'place');
+    if (ids.has(stop.id)) continue;
+    if (item.duration !== null && item.duration !== undefined && (!Number.isInteger(item.duration) || item.duration < 1 || item.duration > 1440)) throw Error('Invalid required duration');
+    stop.duration = item.duration ?? Math.round(((visits[source?.category] || 40) * profile.factor) / 5) * 5;
+    candidates.push({ stop, category: source?.category || 'attraction', interests: matchingInterests(source?.category, interests), order: candidates.length });
+    ids.add(stop.id);
+  }
   for (const [items, type] of [[shortlistPlaces(places, interests, origin), 'place'], [events, 'event']]) {
     for (const item of items) {
       try {
@@ -56,7 +67,7 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
   async function legTo(from, to) {
     const key = JSON.stringify([from.location, to.location]);
     if (!routes.has(key)) {
-      if (checks >= 24) { limited = true; return null; }
+      if (checks >= (required.length ? 48 : 24)) { limited = true; return null; }
       checks++;
       routes.set(key, walkingLegs([from, to], { signal, fetchResponse }).then(([leg]) => {
         if (leg.status !== 'ok' || !Number.isFinite(leg.duration) || leg.duration < 0 || !Number.isFinite(leg.distance) || leg.distance < 0) {
@@ -116,6 +127,12 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
     // when it no longer fits afterward. Every trial already includes its cost.
     const after = await evaluateVariant(candidate, 'after');
     return after ?? evaluateVariant(candidate, 'before');
+  }
+  if (required.length) {
+    const result = await planRequiredVisits({ candidates: pool, start, end, timeZone, origin, destination,
+      returnDeadline, returnTrip, pauseOptions, profile, interests }, { legTo, signal, onProgress });
+    return { ...result, failedRoutes, skippedEvents, limited: limited || result.limited,
+      ...(result.requiredConflict && limited && { requiredConflict: { code: 'search-limit' } }) };
   }
   while (visitCount < profile.stops && pool.length) {
     signal?.throwIfAborted();

@@ -11,6 +11,7 @@ import { createNameTranslator } from '../src/name-translator.mjs';
 import { createMealSearch } from '../src/meal-search.mjs';
 
 const assets = new Map([
+  ['/required-plan.mjs', ['../src/required-plan.mjs', 'text/javascript']],
   ['/meal-options-panel.mjs', ['../web/meal-options-panel.mjs', 'text/javascript']],
   ['/meal-options.mjs', ['../src/meal-options.mjs', 'text/javascript']],
   ['/meal-venue.mjs', ['../src/meal-venue.mjs', 'text/javascript']],

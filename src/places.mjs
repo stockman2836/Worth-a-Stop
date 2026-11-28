@@ -6,6 +6,7 @@ import { validTerritory } from './territory.mjs';
 import { cityEnclaves } from './city-enclaves.mjs';
 import { initialCityBounds } from './place-preview.mjs';
 import { placePoint } from './place-point.mjs';
+import { settlementSearchArea } from './search-area.mjs';
 
 function importance(tags, translations) {
   const landmark = categories.building.includes(tags.building) || tags.tourism === 'attraction' || categories.historic.includes(tags.historic);
@@ -31,7 +32,15 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
   const { latitude, longitude } = city;
   if (!validPoint(latitude, longitude)) throw Error('Invalid city centre');
   if (!['city', 'nearby'].includes(scope)) throw Error('Invalid place search scope');
-  let boundary = scope === 'city' ? await resolveBoundary(city, { signal, fetchResponse }) : null;
+  let boundary = null, searchArea;
+  if (scope === 'city') {
+    try { boundary = await resolveBoundary(city, { signal, fetchResponse }); }
+    catch (error) {
+      signal?.throwIfAborted();
+      if (error.code !== 'CITY_BOUNDARY_UNAVAILABLE') throw error;
+      searchArea = await settlementSearchArea(city, { signal, fetchResponse });
+    }
+  }
   if (boundary && !boundary.segments) {
     const shape = await cityBoundaryParts(boundary, city, { signal, fetchResponse, queryCache });
     if (shape) boundary = { ...boundary, ...shape };
@@ -158,10 +167,10 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
       if (matches.some(other => distance(place.latitude, place.longitude, other.latitude, other.longitude) < .2)) continue;
       unique.push(place); matches.push(place); names.set(name, matches);
       if (place.identity) identities.add(place.identity);
-      if (!boundary && unique.length === 12) break;
+      if (!boundary && scope === 'nearby' && unique.length === 12) break;
     }
     const result = classifyProminence(unique);
-    return boundary ? { places: result, boundary: { name: boundary.name, url: boundary.url, ...(boundary.kind && { kind: boundary.kind }),
-      ...(enclaves.length && { enclaves: enclaves.map(describe) }) }, ...(incomplete && { incomplete }) } : result;
+    return scope === 'city' ? { places: result, ...(boundary ? { boundary: { name: boundary.name, url: boundary.url, ...(boundary.kind && { kind: boundary.kind }),
+      ...(enclaves.length && { enclaves: enclaves.map(describe) }) } } : { searchArea }), ...(incomplete && { incomplete }) } : result;
   }
 }

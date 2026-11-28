@@ -4,7 +4,7 @@ const day = 86400000;
 // One shared queue and budget per server, including concurrent city requests.
 export function createNameTranslator({ fetchResponse = fetch, cache, now = Date.now, dailyLimit = 4500 } = {}) {
   const memory = new Map();
-  let queue = Promise.resolve(), budget, blockedUntil = 0, pending = 0;
+  let queue = Promise.resolve(), budget, blockedUntil = 0, blockedReason, pending = 0;
   async function translate(items, target, signal) {
     const translations = [], deadline = now() + 6000;
     for (const item of items) {
@@ -23,7 +23,7 @@ export function createNameTranslator({ fetchResponse = fetch, cache, now = Date.
         if (!Number.isFinite(budget.used) || budget.used < 0) budget.used = dailyLimit;
       }
       if (budget.used + item.text.length > dailyLimit) {
-        blockedUntil = Date.parse(date) + day; continue;
+        blockedUntil = Date.parse(date) + day; blockedReason = 'daily-limit'; continue;
       }
       // Reserve before sending: failed upstream requests may also consume quota.
       budget.used += item.text.length;
@@ -35,7 +35,7 @@ export function createNameTranslator({ fetchResponse = fetch, cache, now = Date.
         if (!response.ok) throw Error('Translation unavailable');
         const result = await response.json();
         if (result.quotaFinished || Number(result.responseStatus) === 429) {
-          blockedUntil = Date.parse(date) + day; continue;
+          blockedUntil = Date.parse(date) + day; blockedReason = 'provider-quota'; continue;
         }
         const value = result.responseData?.translatedText;
         if (Number(result.responseStatus) !== 200 || typeof value !== 'string' || !value.trim() || value.length > 500 ||
@@ -45,12 +45,12 @@ export function createNameTranslator({ fetchResponse = fetch, cache, now = Date.
         if (memory.size > 2000) memory.delete(memory.keys().next().value);
         await cache?.set(key, saved);
         translations.push({ ...item, translation: saved.value });
-      } catch { blockedUntil = now() + 60000; }
+      } catch { blockedUntil = now() + 60000; blockedReason = 'provider-unavailable'; }
     }
-    return { translations, ...(blockedUntil > now() && { retryAt: blockedUntil }) };
+    return { translations, ...(blockedUntil > now() && { retryAt: blockedUntil, reason: blockedReason }) };
   }
   return (items, target, signal) => {
-    if (pending >= 16) return Promise.resolve({ translations: [], retryAt: now() + 60000 });
+    if (pending >= 16) return Promise.resolve({ translations: [], retryAt: now() + 60000, reason: 'queue-full' });
     pending++;
     const job = queue.then(() => translate(items, target, signal)).finally(() => { pending--; });
     queue = job.catch(() => {});

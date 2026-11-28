@@ -9,6 +9,7 @@ import { placeList } from './place-list.mjs';
 import { territoryLabel } from './territory.mjs';
 import { placeName } from './place-name.mjs';
 import { watchNameTranslations } from './name-translations.mjs';
+import { diagnostic } from './diagnostics.mjs';
 
 const copy = {
   ru: { moreLoading: 'Загружаем остальные районы… Найденные места уже можно смотреть.', partial: 'Часть районов пока недоступна. Загруженные места показаны; повторите через минуту.', title: 'Места города', loading: 'Ищем границу города и интересные места…', empty: 'В границах города подходящих мест не найдено.',
@@ -118,7 +119,7 @@ export function placesPanel(city, language, signal, open, selection) {
   watchNameTranslations(target => {
     if (target !== language) return;
     listView.refreshNames();
-    map?.setPlaces(loadedPlaces);
+    map?.refreshNames();
     itinerary?.setPlaceNames(loadedPlaces);
   }, signal);
   const mapControls = document.createElement('div'); mapControls.className = 'map-discovery-controls';
@@ -259,8 +260,10 @@ export function placesPanel(city, language, signal, open, selection) {
     retry.hidden = true;
     if (!loadedPlaces.length) status.textContent = text.loading;
     try {
-      const { places, boundary, surroundings, referencesStatus, stale, checkedAt, revision = checkedAt, incomplete, loading, retryAt } = await loadPlaces(city, { signal, storage });
+      const { places, boundary, searchArea, surroundings, referencesStatus, stale, checkedAt, revision = checkedAt, incomplete, loading, retryAt } = await loadPlaces(city, { signal, storage });
       if (signal.aborted) return;
+      diagnostic('places', 'loaded', { city: city.name, id: city.id, count: places.length, coverage: boundary ? boundary.kind || 'city' : searchArea?.kind,
+        loading: Boolean(loading), incomplete: Boolean(incomplete), stale: Boolean(stale) });
       if (loading) refreshTimer = setTimeout(load, 2000);
       if (loading && renderedAt === revision) return;
       renderedAt = revision;
@@ -286,21 +289,29 @@ export function placesPanel(city, language, signal, open, selection) {
       if (draft) map.previewPlan(draft.legs, draft.stops);
       const date = new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(checkedAt);
       status.textContent = [loading ? referencesStatus === 'loading' ? text.referencesLoading : text.moreLoading : incomplete ? text.partial : surroundings ? text.surroundings : places.length ? text.scope : text.empty, stale && text.saved + ' ' + date].filter(Boolean).join(' · ');
+      if (searchArea) status.textContent = (language === 'ru'
+        ? 'Контур поселения не найден. Показаны окрестности в пределах 2 км от выбранного центра.'
+        : 'No settlement boundary found. Showing surroundings within 2 km of the selected centre.') +
+        (!places.length && !loading ? (language === 'ru' ? ' Подходящих мест в источнике не найдено.' : ' No matching places found in the source.') : '') +
+        (incomplete ? ' ' + text.partial : '') + (stale ? ' ' + text.saved + ' ' + date : '');
       referenceStatus.textContent = referencesStatus === 'partial' ? text.referencesPartial : referencesStatus === 'unavailable' ? text.referencesUnavailable : '';
       referenceStatus.hidden = !referenceStatus.textContent;
-      const boundaryLink = document.createElement('a');
-      boundaryLink.href = boundary.url;
-      boundaryLink.textContent = `${boundary.kind === 'settlement' ? text.settlement : boundary.kind === 'city-state' ? text.cityState : text.boundary}: ${boundary.name}`;
-      status.append(' · ', boundaryLink);
-      for (const enclave of boundary.enclaves || []) {
-        const link = document.createElement('a'); link.href = enclave.url;
-        link.textContent = territoryLabel(enclave, language);
-        status.append(' · ', link);
+      if (boundary) {
+        const boundaryLink = document.createElement('a');
+        boundaryLink.href = boundary.url;
+        boundaryLink.textContent = `${boundary.kind === 'settlement' ? text.settlement : boundary.kind === 'city-state' ? text.cityState : text.boundary}: ${boundary.name}`;
+        status.append(' · ', boundaryLink);
+        for (const enclave of boundary.enclaves || []) {
+          const link = document.createElement('a'); link.href = enclave.url;
+          link.textContent = territoryLabel(enclave, language);
+          status.append(' · ', link);
+        }
       }
       retry.hidden = loading || !stale && !incomplete;
       if (!retry.hidden) unlockRetry(retryAt);
     } catch (error) {
       if (signal.aborted) return;
+      diagnostic('places', 'failed', { city: city.name, id: city.id, code: error.code, message: error.message, retryAt: error.retryAt });
       status.textContent = error.code === 'CITY_BOUNDARY_UNAVAILABLE' ? text.boundaryError :
         error.code === 'PLACE_SOURCE_UNAVAILABLE' ? text.sourceError : text.error;
       retry.hidden = error.code === 'CITY_BOUNDARY_UNAVAILABLE';

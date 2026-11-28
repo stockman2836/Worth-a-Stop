@@ -27,8 +27,12 @@ export async function browserHarness(t) {
     t.after(async () => {
       socket?.close();
       await Promise.all(children.map(async child => {
-        if (child.exitCode !== null || child.signalCode !== null) return;
-        const stopped = once(child, 'exit'); child.kill(); await stopped;
+        if (child.exitCode === null && child.signalCode === null) {
+          const stopped = once(child, 'exit'); child.kill(); await stopped;
+        }
+        // Opera helper processes can retain inherited pipes after the browser
+        // exits. Those pipes must not keep an otherwise finished test alive.
+        child.stdout?.destroy(); child.stderr?.destroy();
       }));
       if (dirname(resolve(profile)) === resolve(tmpdir()) && basename(profile).startsWith('worth-map-browser-')) {
         await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
@@ -43,8 +47,14 @@ export async function browserHarness(t) {
     { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     children.push(browser);
     const browserSocket = new URL(await output(browser, 'stderr', /DevTools listening on (ws:\/\/\S+)/));
-    const targets = await (await fetch(`http://127.0.0.1:${browserSocket.port}/json/list`)).json();
-    socket = new WebSocket(targets.find(target => target.type === 'page').webSocketDebuggerUrl);
+    let page;
+    for (let attempt = 0; attempt < 50 && !page; attempt++) {
+      const targets = await (await fetch(`http://127.0.0.1:${browserSocket.port}/json/list`)).json();
+      page = targets.find(target => target.type === 'page');
+      if (!page) await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    if (!page) throw Error('Browser did not create a test page');
+    socket = new WebSocket(page.webSocketDebuggerUrl);
     await once(socket, 'open');
     let id = 0;
     const pending = new Map(), errors = [], failures = [], requests = new Map();
@@ -89,6 +99,7 @@ export async function browserHarness(t) {
     await call('Fetch.enable', { patterns: [{ urlPattern: address + '*', requestStage: 'Request' }] });
     await call('Network.setBlockedURLs', { urls: ['https://*'] });
     await call('Page.navigate', { url: address + '/' });
+    await call('Page.bringToFront');
     let ready = false;
     for (let attempt = 0; attempt < 100; attempt++) {
       const state = await call('Runtime.evaluate', { returnByValue: true,

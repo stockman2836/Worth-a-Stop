@@ -12,6 +12,29 @@ function storage() {
 }
 const unavailable = async () => new Response(null, { status: 502 });
 
+test('stores and restores explicitly labelled nearby coverage only for the selected settlement centre', async () => {
+  const saved = storage(), searchArea = { kind: 'nearby', radiusKm: 2, latitude: city.latitude, longitude: city.longitude };
+  const first = await loadPlaces(city, { storage: saved, fetchResponse: async () => Response.json({ places: [place], searchArea }) });
+  assert.equal(first.boundary, undefined); assert.deepEqual(first.searchArea, searchArea);
+  const offline = await loadPlaces(city, { storage: saved, fetchResponse: unavailable });
+  assert.deepEqual(offline.searchArea, searchArea); assert.equal(offline.stale, true);
+  await assert.rejects(loadPlaces(city, { fetchResponse: async () => Response.json({ places: [], searchArea: { ...searchArea, latitude: 0 } }) }), /Invalid places response/);
+  await assert.rejects(loadPlaces(city, { fetchResponse: async () => Response.json({ places: [], searchArea: { ...searchArea, radiusKm: 200 } }) }), /Invalid places response/);
+});
+
+test('progressive neighbourhood refreshes preserve coverage without fabricating a boundary object', async () => {
+  const saved = storage(), searchArea = { kind: 'nearby', radiusKm: 2, latitude: city.latitude, longitude: city.longitude };
+  await loadPlaces(city, { storage: saved, fetchResponse: async () => Response.json({ places: [place], searchArea }) });
+  const updated = { ...place, name: 'Updated park' };
+  const progress = await loadPlaces(city, { storage: saved, fetchResponse: async () => Response.json({ places: [updated], searchArea, incomplete: true, loading: true }) });
+  assert.equal(progress.boundary, undefined);
+  assert.deepEqual(progress.searchArea, searchArea);
+  assert.equal(progress.places[0].name, updated.name);
+  assert.equal(progress.loading, true);
+  const restored = await loadPlaces(city, { storage: saved, fetchResponse: unavailable });
+  assert.equal(restored.places[0].name, place.name);
+});
+
 test('restores the last successful result for the same centre after an outage', async () => {
   const saved = storage();
   const live = await loadPlaces(city, { storage: saved, fetchResponse: cityResponse });
@@ -47,7 +70,7 @@ test('city and local searches use separate versioned cache entries and the corre
   assert.equal(calls[0].searchParams.get('scope'), 'city');
   assert.equal(calls[0].searchParams.get('id'), '42');
   assert.equal(calls[0].searchParams.get('name'), 'Town');
-  assert.equal(calls[0].searchParams.get('v'), '14');
+  assert.equal(calls[0].searchParams.get('v'), '15');
   assert.equal(calls[0].searchParams.has('radius'), false);
   await assert.rejects(loadPlaces(city, { storage: saved, scope: 'nearby', fetchResponse: unavailable }));
   await loadPlaces(city, { storage: saved, scope: 'nearby', fetchResponse });

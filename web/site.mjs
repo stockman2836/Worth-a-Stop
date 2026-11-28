@@ -2,6 +2,7 @@ import { suggestCities } from './cities.mjs';
 import { featuredCities } from './sources.mjs';
 import { cityWorkspace } from './city-workspace.mjs';
 import { iconLabel } from './icons.mjs';
+import { diagnostic } from './diagnostics.mjs';
 
 const copy = {
   ru: {
@@ -164,6 +165,8 @@ async function showSearch(query, openSingle = false) {
     const lookup = (url, options) => fetch(url, { ...options, signal: AbortSignal.any([options.signal, signal]) });
     const { cities, correction } = await suggestCities(query, lookup, language, selectedCountry);
     if (currentRequest !== requestId) return;
+    diagnostic('search', 'results', { query, language, count: cities.length, correction,
+      cities: cities.slice(0, 5).map(city => ({ id: city.id, name: city.name, country: city.countryCode })) });
     if (openSingle && cities.length === 1) { openCity(cities[0]); return; }
     results.replaceChildren(...cities.map(cityRow));
     status.textContent = correction ? text.corrected(correction) : cities.length ? text.found(cities.length) : text.empty;

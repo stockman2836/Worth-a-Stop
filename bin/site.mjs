@@ -10,6 +10,8 @@ import { createWalkingRouter } from '../src/walking-router.mjs';
 import { createNameTranslator } from '../src/name-translator.mjs';
 
 const assets = new Map([
+  ['/diagnostics.mjs', ['../web/diagnostics.mjs', 'text/javascript']],
+  ['/search-area.mjs', ['../src/search-area.mjs', 'text/javascript']],
   ['/name-translations.mjs', ['../web/name-translations.mjs', 'text/javascript']],
   ['/name-translation.mjs', ['../src/name-translation.mjs', 'text/javascript']],
   ['/travel-interests.mjs', ['../src/travel-interests.mjs', 'text/javascript']],

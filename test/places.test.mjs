@@ -6,6 +6,36 @@ const city = { latitude: 0, longitude: 0 };
 const node = { id: 9, type: 'node', lat: 0, lon: .009, tags: { tourism: 'museum', name: 'Museum', 'name:ru': 'Музей', opening_hours: 'Mo-Fr 10:00-18:00' } };
 const query = elements => nearbyPlaces(city, { fetchResponse: async () => Response.json({ elements }) });
 
+test('a confirmed settlement without its own polygon returns nearby coverage, not its larger municipality', async () => {
+  const settlement = { id: 42, name: 'Small village', latitude: 0, longitude: 0 };
+  const result = await nearbyPlaces(settlement, { scope: 'city', resolveBoundary: async () => {
+    throw Object.assign(Error('No own boundary'), { code: 'CITY_BOUNDARY_UNAVAILABLE' });
+  }, fetchResponse: async url => {
+    if (url.hostname === 'geocoding-api.open-meteo.com') return Response.json({ ...settlement, feature_code: 'PPL' });
+    if (url.hostname === 'download.geofabrik.de') return new Response(null, { status: 503 });
+    return Response.json({ elements: [node, { ...node, id: 100, lon: 1, tags: { ...node.tags, name: 'Outside village' } }] });
+  } });
+  assert.equal(result.boundary, undefined);
+  assert.deepEqual(result.searchArea, { kind: 'nearby', radiusKm: 2, latitude: 0, longitude: 0 });
+  assert.deepEqual(result.places.map(place => place.name), ['Museum']);
+});
+
+test('missing boundary fallback preserves empty source results and never masks source outages or unverified identities', async () => {
+  const settlement = { id: 42, name: 'Village', latitude: 0, longitude: 0 };
+  const missing = async () => { throw Object.assign(Error('No polygon'), { code: 'CITY_BOUNDARY_UNAVAILABLE' }); };
+  const result = await nearbyPlaces(settlement, { scope: 'city', resolveBoundary: missing, fetchResponse: async url =>
+    url.hostname === 'geocoding-api.open-meteo.com' ? Response.json({ ...settlement, feature_code: 'PPL' }) :
+      url.hostname === 'download.geofabrik.de' ? new Response(null, { status: 503 }) : Response.json({ elements: [] }) });
+  assert.deepEqual(result.places, []); assert.equal(result.searchArea.kind, 'nearby');
+  await assert.rejects(nearbyPlaces(settlement, { scope: 'city', resolveBoundary: missing, fetchResponse: async () =>
+    Response.json({ ...settlement, id: 43, feature_code: 'PPL' }) }), { code: 'CITY_BOUNDARY_UNAVAILABLE' });
+  await assert.rejects(nearbyPlaces(settlement, { scope: 'city', resolveBoundary: missing, fetchResponse: async () =>
+    new Response('upstream error', { status: 200 }) }), { code: 'PLACE_SOURCE_UNAVAILABLE' });
+  await assert.rejects(nearbyPlaces(settlement, { scope: 'city', resolveBoundary: async () => {
+    throw Object.assign(Error('Provider offline'), { code: 'PLACE_SOURCE_UNAVAILABLE' });
+  }, fetchResponse: () => assert.fail('An outage must not trigger a different search area') }), { code: 'PLACE_SOURCE_UNAVAILABLE' });
+});
+
 test('uses localized names, published hours and object links with great-circle distances', async () => {
   const places = await query([node, { ...node, lon: .05 }, { ...node, tags: { ...node.tags, access: 'private' } }]);
   assert.equal(places.length, 1);

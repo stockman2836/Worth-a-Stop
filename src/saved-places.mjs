@@ -1,5 +1,6 @@
 import { validTerritory } from './territory.mjs';
 import { validPlaceReference } from './place-reference.mjs';
+import { validNearbySearchArea } from './search-area.mjs';
 
 function validPlaces(places, limit) {
   return Array.isArray(places) && places.length <= limit && places.every(place =>
@@ -25,7 +26,8 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
   if (!['city', 'nearby'].includes(scope)) throw Error('Invalid place search scope');
   const limit = scope === 'city' ? Infinity : 12;
   const key = `worth-a-stop.places.v7.${scope}.${scope === 'city' ? city.id + '.' : ''}${city.latitude}.${city.longitude}`;
-  const validResult = result => validPlaces(result?.places, limit) && (scope !== 'city' || validBoundary(result.boundary));
+  const validResult = result => validPlaces(result?.places, limit) && (scope !== 'city' || validBoundary(result.boundary) ||
+    result.boundary === undefined && validNearbySearchArea(result.searchArea, city));
   let saved;
   try {
     let data = JSON.parse(storage?.getItem(key) ?? 'null');
@@ -43,7 +45,7 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
   try {
     const blocked = cooldown.get(key);
     if (blocked?.retryAt > Date.now()) throw blocked;
-    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '14' });
+    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '15' });
     if (scope === 'city') { query.set('id', city.id); query.set('name', city.name); }
     const response = await fetchResponse('/api/places?' + query, { signal });
     const payload = await response.json().catch(() => undefined);
@@ -61,16 +63,16 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
     if (!validResult(data)) throw Error('Invalid places response');
     signal?.throwIfAborted();
     cooldown.delete(key);
-    if (data.incomplete && saved && !saved.incomplete) {
+    if (data.incomplete && saved && !saved.incomplete && Boolean(data.boundary) === Boolean(saved.boundary)) {
       const places = new Map(saved.places.map(place => [place.url, place]));
       for (const place of data.places) places.set(place.url, place);
       const enclaves = new Map((saved.boundary?.enclaves ?? []).map(territory => [territory.url, territory]));
       for (const territory of data.boundary?.enclaves ?? []) enclaves.set(territory.url, territory);
       return { ...saved, places: [...places.values()],
-        ...(scope === 'city' && { boundary: { ...data.boundary, ...(enclaves.size && { enclaves: [...enclaves.values()] }) } }),
+        ...(scope === 'city' && data.boundary && { boundary: { ...data.boundary, ...(enclaves.size && { enclaves: [...enclaves.values()] }) } }),
         referencesStatus: data.referencesStatus, revision: data.checkedAt ?? Date.now(), stale: true, incomplete: true, loading: Boolean(data.loading), retryAt: data.retryAt };
     }
-    const result = { places: data.places, ...(scope === 'city' && { boundary: data.boundary }),
+    const result = { places: data.places, ...(scope === 'city' && (data.boundary ? { boundary: data.boundary } : { searchArea: data.searchArea })),
       ...(data.surroundings && { surroundings: true }),
       ...(['loading', 'checked', 'partial', 'unavailable'].includes(data.referencesStatus) && { referencesStatus: data.referencesStatus }),
       ...(data.incomplete && { incomplete: true }), ...(Number.isFinite(data.retryAt) && { retryAt: data.retryAt }),

@@ -53,14 +53,14 @@ export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
       entry.signal?.throwIfAborted();
       let saved = await diskCache?.get(key).catch(() => undefined);
       if (saved?.expires > now()) { entry.pending = false; entry.expires = saved.expires; return saved.value; }
-      if (!saved && job && key.startsWith('places-v14/city/')) {
-        for (const version of ['v13', 'v12', 'v11', 'v10', 'v9']) {
-          saved = await diskCache?.get(key.replace('places-v14/', `places-${version}/`)).catch(() => undefined);
+      if (!saved && job && key.startsWith('places-v15/city/')) {
+        for (const version of ['v14', 'v13', 'v12', 'v11', 'v10', 'v9']) {
+          saved = await diskCache?.get(key.replace('places-v15/', `places-${version}/`)).catch(() => undefined);
           if (saved) break;
         }
       }
       const fallback = previous ?? saved?.value;
-      if (job && Array.isArray(fallback?.places) && fallback.boundary &&
+      if (job && Array.isArray(fallback?.places) && (fallback.boundary || fallback.searchArea) &&
           now() - (fallback.checkedAt ?? saved?.expires - ttl) <= 7 * 86400000) {
         entry.snapshot = { ...fallback, checkedAt: fallback.checkedAt ?? Math.max(0, saved.expires - ttl), stale: true, incomplete: true };
         publish({ ...entry.snapshot, loading: true });
@@ -101,7 +101,7 @@ export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
   return async (city, { scope = 'nearby', signal } = {}) => {
     signal?.throwIfAborted();
     const identity = [city.id, city.latitude, city.longitude].join('/');
-    const key = 'places-v14/' + (scope === 'city' ? 'city/' + identity : ['nearby', city.latitude, city.longitude].join('/'));
+    const key = 'places-v15/' + (scope === 'city' ? 'city/' + identity : ['nearby', city.latitude, city.longitude].join('/'));
     return cached(results, key, 3600000, async (onProgress, jobSignal) => {
       const result = await discoverPlaces(city, {
         scope, fetchResponse, queryCache: diskCache, signal: jobSignal,

@@ -4,6 +4,8 @@ import { discoveryIndex } from './discovery-index.mjs';
 import { detailZoom, initialHighlights } from './discovery-visibility.mjs';
 import { referenceLink } from './place-reference-view.mjs';
 import { basemap } from './basemap.mjs';
+import { placeTranslationRequest, machinePlaceName } from './place-name.mjs';
+import { translateNames, translationAvailability } from './name-translations.mjs';
 
 export function placesMap(container, city, places, labels, onSelect, view) {
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -19,6 +21,38 @@ export function placesMap(container, city, places, labels, onSelect, view) {
   message.setAttribute('role', 'status');
   container.after(message);
   const background = basemap(map, labels.language ?? 'en', labels, message);
+  const nameController = new AbortController(), namedMarkers = new Map(), pendingNames = new Map(), attemptedNames = new Map();
+  let nameTimer;
+  function translatePlaceNames(requests) {
+    const key = request => JSON.stringify([labels.language ?? 'en', request.source, request.text]);
+    const fresh = requests.filter(request => !pendingNames.has(key(request)));
+    if (fresh.length) {
+      const job = translateNames(fresh, labels.language ?? 'en', { signal: nameController.signal }).finally(() => {
+        for (const request of fresh) pendingNames.delete(key(request));
+      });
+      for (const request of fresh) pendingNames.set(key(request), job);
+    }
+    return Promise.all([...new Set(requests.map(request => pendingNames.get(key(request))))]).then(results => results.flat());
+  }
+  function schedulePlaceNames() {
+    if (!nameTimer && !destroyed) nameTimer = setTimeout(async () => {
+      nameTimer = undefined;
+      if (destroyed || translationAvailability().state === 'paused') return;
+      const requests = new Map();
+      for (const [marker, item] of namedMarkers) {
+        if (item.kind !== 'place' || !marker.getTooltip()) continue;
+        const request = placeTranslationRequest(placesByUrl.get(item.url) ?? item, labels.language ?? 'en');
+        if (request && !machinePlaceName(item, labels.language ?? 'en') &&
+            (attemptedNames.get(request.text) || 0) < Date.now() - 60000) requests.set(request.text, request);
+      }
+      const batch = [...requests.values()].slice(0, 4);
+      if (!batch.length) return;
+      for (const request of batch) attemptedNames.set(request.text, Date.now());
+      while (attemptedNames.size > 1000) attemptedNames.delete(attemptedNames.keys().next().value);
+      const entries = await translatePlaceNames(batch);
+      if (!destroyed && entries.length) { refreshNames(); schedulePlaceNames(); }
+    }, 150);
+  }
   const discoveryLayer = L.layerGroup().addTo(map);
   const focusLayer = L.layerGroup().addTo(map);
   let placeItems = places.map((place, index) => ({ ...place, kind: 'place', key: 'p:' + index, index }));
@@ -30,6 +64,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
   let indexTier = -1;
   const stateFor = item => item.kind === 'place' ? states[item.index] : eventStates.get(events[item.index]);
   const nameFor = item => item.kind === 'event' || item.type === 'event' ? item.title : labels.name(placesByUrl.get(item.url) ?? item);
+  const nameElement = item => { const span = document.createElement('span'); span.textContent = nameFor(item); return span; };
   const visibleItem = item => !onlyAvailable || (item.kind === 'place' ? stateFor(item)?.state === 'open' : stateFor(item)?.available);
   function popupContent(item) {
     const popup = document.createElement('div');
@@ -43,6 +78,21 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     state.textContent = stateFor(item)?.label || '';
     state.dataset.state = stateFor(item)?.state || 'unknown';
     popup.append(title, state, hours);
+    if (item.kind === 'place') {
+      const source = placesByUrl.get(item.url) ?? item, language = labels.language ?? 'en';
+      const request = placeTranslationRequest(source, language);
+      if (request && !machinePlaceName(source, language)) {
+        const translation = document.createElement('p'); translation.className = 'name-translation-status';
+        translation.textContent = language === 'ru' ? 'Переводим название…' : 'Translating name…'; popup.append(translation);
+        translatePlaceNames([request]).then(entries => {
+          if (destroyed || !title.isConnected) return;
+          title.textContent = nameFor(item);
+          translation.textContent = entries.length ? (language === 'ru' ? 'Машинный перевод · MyMemory' : 'Machine translation · MyMemory') :
+            translationAvailability().state === 'paused' ? (language === 'ru' ? 'Перевод временно недоступен. Сохранено название источника.' : 'Translation temporarily unavailable. Showing the source name.') : '';
+          if (focusMarker?.getPopup()?.getContent() === popup) focusMarker.getPopup().update();
+        });
+      }
+    }
     const reference = referenceLink(item, labels);
     if (reference) popup.append(reference);
     if (item.territory && labels.territory) {
@@ -59,7 +109,9 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     element.dataset.group = group; element.dataset.state = stateFor(item)?.state || 'unknown';
     element.dataset.prominence = item.prominence || '';
     const category = item.kind === 'place' ? labels[item.category] || labels[placeSymbols[group].label] : labels.legendEvents;
-    element.title = [nameFor(item), category, item.territory && labels.territory?.(item.territory), item.mapLabel, stateFor(item)?.label].filter(Boolean).join(' · ');
+    const machine = item.kind === 'place' && machinePlaceName(placesByUrl.get(item.url) ?? item, labels.language ?? 'en');
+    element.title = [nameFor(item), machine && (labels.language === 'ru' ? 'Машинный перевод' : 'Machine translation'), category,
+      item.territory && labels.territory?.(item.territory), item.mapLabel, stateFor(item)?.label].filter(Boolean).join(' · ');
     element.setAttribute('aria-label', element.title);
   }
   function markerFor(item, focus = false) {
@@ -70,7 +122,8 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     const className = (place ? 'place-marker' + (highlight ? ' highlight-marker' : '') : 'event-marker') + (focus ? ' focused-marker' : '');
     const icon = L.divIcon({ className, html: markerFace(symbol), iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
     const marker = L.marker([item.latitude, item.longitude], { icon, title: nameFor(item), riseOnHover: true, zIndexOffset: focus ? 2000 : highlight ? 800 : 0 });
-    marker.on('add', () => decorate(marker, item));
+    marker.on('add', () => { namedMarkers.set(marker, item); decorate(marker, item); });
+    marker.on('remove', () => namedMarkers.delete(marker));
     if (focus) {
       marker.bindPopup(popupContent(item));
       if (place) marker.on('popupopen', () => onSelect(item.index));
@@ -117,10 +170,11 @@ export function placesMap(container, city, places, labels, onSelect, view) {
       const box = { left: point.x - width / 2, right: point.x + width / 2, top: point.y - 39, bottom: point.y - 17 };
       if (!labelsUsed.some(other => box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top)) {
         labelsUsed.push(box);
-        marker.bindTooltip(nameFor(item), { permanent: true, direction: 'top', offset: [0, -13], className: 'landmark-label', interactive: true });
+        marker.bindTooltip(nameElement(item), { permanent: true, direction: 'top', offset: [0, -13], className: 'landmark-label', interactive: true });
         marker.getTooltip().on('click', () => selectItem(item));
       }
     }
+    schedulePlaceNames();
     for (const feature of index.visible([bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()], Math.floor(map.getZoom()))) {
       if (!feature.properties.cluster) { markerFor(index.item(feature)).addTo(discoveryLayer); continue; }
       const properties = feature.properties, point = [feature.geometry.coordinates[1], feature.geometry.coordinates[0]];
@@ -196,7 +250,18 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     }
   }
   container.addEventListener('keydown', keydown);
+  function refreshNames() {
+    for (const [marker, item] of namedMarkers) {
+      decorate(marker, item);
+      if (marker.getTooltip()) marker.setTooltipContent(nameElement(item));
+      const content = marker.getPopup()?.getContent();
+      const title = content?.querySelector?.('a');
+      if (title) title.textContent = nameFor(item);
+      if (marker.isPopupOpen()) marker.getPopup().update();
+    }
+  }
   return {
+    refreshNames,
     view() { const centre = map.getCenter().wrap(); return { latitude: centre.lat, longitude: centre.lng, zoom: map.getZoom() }; },
     setPlaces(value, refit = false) {
       clearFocus(false);
@@ -305,7 +370,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
       // Leaflet 1.9 removes the wheel listener but leaves its debounced zoom
       // scheduled. Cancel it before remove() deletes the map pane.
       map.scrollWheelZoom.disable(); clearTimeout(map.scrollWheelZoom._timer);
-      map.stop(); map.remove(); message.remove();
+      nameController.abort(); clearTimeout(nameTimer); pendingNames.clear(); namedMarkers.clear(); map.stop(); map.remove(); message.remove();
     },
   };
 }

@@ -13,10 +13,12 @@ npm ci
 ### Website
 
 ```sh
-node bin/site.mjs
+node --watch bin/site.mjs
 ```
 
 Open `http://127.0.0.1:3000` in your browser. The site opens in Russian if your browser language is Russian and in English otherwise. Use the RU/EN switch to change languages. It remembers your choice on this device. An open city keeps its selected date, saved itinerary, preview time, availability filter and active discovery tab across language changes, without needing another city lookup. City and region names follow the geocoder's available translations when you search. Live searches require a connection to Open-Meteo.
+
+Watch mode restarts the development server when its imported backend modules change. Reload the browser after frontend changes. A server started without watch mode must be restarted manually after backend updates; otherwise new frontend files can run against old boundary and place-search logic. For a server without automatic restarts, use `node bin/site.mjs`.
 
 Use the theme button in the header to switch between light and dark appearance. The initial theme follows your system setting; an explicit choice is saved on this device and applied before the page is painted. Changing themes keeps the current map and plan in place. The dark palette covers map tiles, controls, popups, cards and form fields. Theme controls are translated into Russian and English, and the switch still works in the current tab if browser storage is unavailable.
 
@@ -146,6 +148,15 @@ The first command prints a JSON array of matches. Each match includes the provid
 An empty array means the search found no matching settlements. Try another spelling if you expect a match. For example, during testing, `Kyoto` returned results while `京都` returned an empty array. If the request fails, the command writes an error to standard error and exits with a nonzero status.
 
 `node --test` checks city search, daily schedules, calendar and guide discovery, caching and event imports offline.
+
+The Leaflet lifecycle regression additionally runs in headless Chrome when `CHROME_BIN` points to a Chrome or Chromium executable. For example, in PowerShell:
+
+```powershell
+$env:CHROME_BIN = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+node --test
+```
+
+This browser test starts an isolated local server, blocks external requests and checks wheel zoom during place updates and immediate map replacement with a pending wheel event. Without `CHROME_BIN`, only this browser test is skipped. The application keeps its Leaflet instance when progressive place batches arrive, and explicitly cancels Leaflet 1.9's pending wheel timer before removing a workspace map.
 
 Place names and coordinates come from GeoNames via Open-Meteo. [Geocoding API documentation](https://open-meteo.com/en/docs/geocoding-api) · [GeoNames](https://www.geonames.org/)
 

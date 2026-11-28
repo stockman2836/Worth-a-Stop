@@ -25,7 +25,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
   tiles.on('load', () => { if (!tileFailed) message.textContent = ''; });
   const discoveryLayer = L.layerGroup().addTo(map);
   const focusLayer = L.layerGroup().addTo(map);
-  const placeItems = places.map((place, index) => ({ ...place, kind: 'place', key: 'p:' + index, index }));
+  let placeItems = places.map((place, index) => ({ ...place, kind: 'place', key: 'p:' + index, index }));
   let events = [], eventItems = [], states = [], eventStates = new Map(), onlyAvailable = false;
   let index = discoveryIndex([]), focused, focusMarker, clearingFocus = false, clusterPopup;
   let pending = false, destroyed = false, fitted = Boolean(restored);
@@ -171,7 +171,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
   }
   map.on('moveend', moved);
   fitInitial(initialHighlights(placeItems)); refresh();
-  const resize = new ResizeObserver(() => map.invalidateSize({ pan: false }));
+  const resize = new ResizeObserver(() => { if (!destroyed) map.invalidateSize({ pan: false }); });
   resize.observe(container);
   const routeLayer = L.layerGroup().addTo(map);
   const previewLayer = L.layerGroup().addTo(map);
@@ -199,6 +199,13 @@ export function placesMap(container, city, places, labels, onSelect, view) {
   container.addEventListener('keydown', keydown);
   return {
     view() { const centre = map.getCenter().wrap(); return { latitude: centre.lat, longitude: centre.lng, zoom: map.getZoom() }; },
+    setPlaces(value, refit = false) {
+      clearFocus(false);
+      placeItems = value.map((place, index) => ({ ...place, kind: 'place', key: 'p:' + index, index }));
+      if (refit) fitted = false;
+      fitInitial(initialHighlights(placeItems));
+      refresh();
+    },
     setEventsVisible(value) {
       showEvents = Boolean(value);
       if (!showEvents && focused?.kind === 'event') clearFocus(false);
@@ -290,6 +297,14 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     selectEvent(event) {
       selectItem(eventItems.find(item => events[item.index] === event));
     },
-    destroy() { destroyed = true; resize.disconnect(); map.off('moveend', moved); container.removeEventListener('keydown', keydown); map.remove(); message.remove(); },
+    destroy() {
+      if (destroyed) return;
+      destroyed = true; resize.disconnect();
+      map.off('moveend', moved); container.removeEventListener('keydown', keydown);
+      // Leaflet 1.9 removes the wheel listener but leaves its debounced zoom
+      // scheduled. Cancel it before remove() deletes the map pane.
+      map.scrollWheelZoom.disable(); clearTimeout(map.scrollWheelZoom._timer);
+      map.stop(); map.remove(); message.remove();
+    },
   };
 }

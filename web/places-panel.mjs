@@ -195,7 +195,8 @@ export function placesPanel(city, language, signal, open, selection) {
   function ensureMap() {
     if (map || !details.open || signal.aborted) return;
     mapBox.hidden = false;
-    map = placesMap(mapBox, city, [], { ...text, name: place => place.names[language] || place.name }, () => {}, selection?.mapView);
+    map = placesMap(mapBox, city, [], { ...text, name: place => place.names[language] || place.name,
+      territory: value => territoryLabel(value, language) }, index => listView.select(index), selection?.mapView);
     map.setEvents(events);
     map.setEventsVisible(eventToggle.checked);
     map.setRoute(route.legs, route.stops, route.focused);
@@ -251,16 +252,14 @@ export function placesPanel(city, language, signal, open, selection) {
       if (loading && renderedAt === revision) return;
       renderedAt = revision;
       const hostArrived = loadedPlaces.length && loadedPlaces.every(place => place.territory) && places.some(place => !place.territory);
-      const view = hostArrived ? undefined : loadedPlaces.length ? map?.view() : selection?.mapView;
-      map?.destroy();
-      map = undefined;
       list.replaceChildren();
       mapBox.hidden = false;
       function select(index) {
         listView.select(index);
       }
-      map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name,
-        territory: value => territoryLabel(value, language) }, select, view);
+      if (map) map.setPlaces(places, hostArrived);
+      else map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name,
+        territory: value => territoryLabel(value, language) }, select, selection?.mapView);
       map.setEvents(events);
       map.setEventsVisible(eventToggle.checked);
       map.setRoute(route.legs, route.stops, route.focused);

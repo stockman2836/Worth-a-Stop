@@ -7,10 +7,12 @@ import { localInstant, visitOpeningState } from './opening-hours.mjs';
 import { territoryLabel } from './territory.mjs';
 import { alternativesPanel } from './alternatives-panel.mjs';
 import { orderPanel } from './order-panel.mjs';
-import { startingPointStore, withStartingPoint } from './starting-point.mjs';
+import { startingPointStore } from './starting-point.mjs';
 import { checkTripWindow } from './trip-window.mjs';
 import { timeMemory as unsavedTimes } from './city-plan-state.mjs';
 import { icon, iconLabel } from './icons.mjs';
+import { returnTripPanel } from './return-trip-panel.mjs';
+import { withTripEndpoints } from './return-trip.mjs';
 
 const copy = {
   ru: { title: 'План дня', date: 'Дата плана', add: 'Добавить в план', empty: 'Добавьте места и события из подборки.',
@@ -183,6 +185,13 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
   const readStart = () => readTime('start');
   startInput.value = readTime('start');
   endInput.value = readTime('end');
+  const returning = returnTripPanel(city, language, storage, signal, { getDay: () => activeDay,
+    getOrigin: () => points.read(activeDay).point, getStart: () => startInput.value, getEnd: () => endInput.value, timeline,
+    onPickOrigin: () => chooseOrigin.click(),
+    onChange: rerender => { if (rerender) render(); else { updateArrivals(); changed(); } } });
+  endLabel.after(returning.element);
+  const routeStops = stops => withTripEndpoints(stops, origin, returning.trip(), {
+    originTitle: text.origin, returnTitle: language === 'ru' ? 'Возвращение' : 'Return', deadline: returning.deadline() });
   const walking = walkingPanel(language, timeline, signal, legs => {
     routeLegs = legs;
     updateArrivals();
@@ -204,14 +213,14 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
   }
   function replacementContext() {
     const savedStops = store.read(activeDay).stops;
-    return { day: activeDay, savedStops, stops: withStartingPoint(savedStops, points.read(activeDay).point, text.origin), legs: routeLegs,
+    return { day: activeDay, savedStops, stops: routeStops(savedStops), legs: routeLegs,
       start: localInstant(activeDay, startInput.value, city.timezone || 'UTC') };
   }
 
   function updateArrivals() {
     const start = localInstant(activeDay, startInput.value, city.timezone || 'UTC');
-    const routeStops = withStartingPoint(currentStops, origin, text.origin);
-    const times = arrivalTimes(routeStops, routeLegs, start).slice(origin && currentStops.length ? 1 : 0);
+    const itineraryRoute = routeStops(currentStops);
+    const times = arrivalTimes(itineraryRoute, routeLegs, start).slice(origin && currentStops.length ? 1 : 0);
     let conflicts = 0;
     for (const [index, item] of [...list.children].entries()) {
       const time = times[index];
@@ -238,12 +247,15 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
         } else warning.textContent = check.state === 'unknown-time' ? text.visitUnknown : text.hoursUnknown;
       }
     }
-    const finish = times.at(-1)?.departure;
+    const returnTrip = returning.trip();
+    const finish = returnTrip && itineraryRoute.at(-1)?.type !== 'return' ? undefined : times.at(-1)?.departure;
+    returning.update(returnTrip ? finish : undefined);
     timingStatus.textContent = [!currentStops.length ? '' : !startInput.value ? text.chooseStart : start === undefined ? text.invalidStart :
       times.some(time => time.reason) ? text.partial : finish != null ? text.finish + ' · ' + when.format(finish) : '',
       conflicts > 0 && text.conflicts(conflicts),
       unsavedTimes.has(timeKey('start')) && text.startUnsaved].filter(Boolean).join(' ');
-    const windowCheck = checkTripWindow(activeDay, startInput.value, endInput.value, city.timezone || 'UTC', finish);
+    const windowCheck = checkTripWindow(activeDay, startInput.value, endInput.value, city.timezone || 'UTC',
+      Number.isFinite(finish) ? finish + (returnTrip?.bufferMinutes ?? 0) * 60000 : finish);
     windowStatus.dataset.state = windowCheck.state;
     windowStatus.textContent = [windowCheck.state === 'fits' ? text.windowFits(windowCheck.minutes) :
       windowCheck.state === 'overrun' ? text.windowOverrun(windowCheck.minutes) :
@@ -284,6 +296,8 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
     count.textContent = text.count(currentStops.length);
     origin = points.read(activeDay).point;
     timeline.setOrigin(origin);
+    returning.refresh();
+    endLabel.firstChild.textContent = returning.trip() ? returning.deadlineLabel : text.end;
     showOriginStatus();
     list.replaceChildren();
     nameLinks.clear();
@@ -359,8 +373,8 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
       list.append(item);
     }
     status.textContent = [feedback, result.saved ? text.saved : text.temporary].filter(Boolean).join(' ');
-    walks.hidden = withStartingPoint(result.stops, origin, text.origin).length < 2;
-    walking.update(withStartingPoint(result.stops, origin, text.origin));
+    walks.hidden = routeStops(result.stops).length < 2;
+    walking.update(routeStops(result.stops));
     updateArrivals();
     changed();
   }
@@ -381,12 +395,12 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
   window.addEventListener('storage', () => { startInput.value = readStart(); endInput.value = readTime('end'); render(); }, { signal });
   function context() {
     return structuredClone({ day: activeDay, startTime: startInput.value, endTime: endInput.value,
-      origin: points.read(activeDay).point, stops: store.read(activeDay).stops });
+      origin: points.read(activeDay).point, returnTrip: returning.trip(), stops: store.read(activeDay).stops });
   }
   render();
   return {
     element,
-    controls: { date: label, start: startLabel, end: endLabel },
+    controls: { date: label, start: startLabel, end: endLabel, returnTrip: returning.element },
     mapButton: walking.mapButton,
     context,
     setPlaceNames(places) {

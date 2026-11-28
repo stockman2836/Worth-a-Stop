@@ -19,7 +19,10 @@ export function arrivalTimes(stops, legs, start) {
     let late = 0;
     departure = null;
     if (arrival !== null) {
-      if (stop.type === 'origin') departure = arrival;
+      if (stop.type === 'origin' || stop.type === 'return') {
+        departure = arrival;
+        if (stop.type === 'return' && Number.isFinite(stop.deadline)) late = Math.ceil(Math.max(0, arrival - stop.deadline) / 60000);
+      }
       else if (stop.type === 'place') {
         if (Number.isInteger(stop.duration) && stop.duration >= 1 && stop.duration <= 1440) {
           departure = arrival + stop.duration * 60000;

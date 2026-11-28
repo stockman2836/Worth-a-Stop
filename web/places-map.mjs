@@ -229,6 +229,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
   const routeLayer = L.layerGroup().addTo(map);
   const previewLayer = L.layerGroup().addTo(map);
   const originLayer = L.layerGroup().addTo(map);
+  const destinationLayer = L.layerGroup().addTo(map);
   let picker;
   function selectStart(latlng) {
     if (!picker) return;
@@ -262,6 +263,13 @@ export function placesMap(container, city, places, labels, onSelect, view) {
   }
   return {
     refreshNames,
+    setDestination(point, title) {
+      destinationLayer.clearLayers();
+      if (!point) return;
+      const content = document.createElement('span'); content.textContent = title;
+      const icon = L.divIcon({ className: 'origin-marker return-marker', html: markerFace('flag'), iconSize: [34, 34], iconAnchor: [17, 17] });
+      L.marker([point.latitude, point.longitude], { icon, title, alt: title, zIndexOffset: 2501 }).bindPopup(content).addTo(destinationLayer);
+    },
     view() { const centre = map.getCenter().wrap(); return { latitude: centre.lat, longitude: centre.lng, zoom: map.getZoom() }; },
     setPlaces(value, refit = false) {
       clearFocus(false);
@@ -302,7 +310,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
         const content = document.createElement('a');
         content.href = stop.url;
         content.textContent = nameFor(stop);
-        const origin = stop.type === 'origin';
+        const origin = stop.type === 'origin' || stop.type === 'return';
         const label = origin ? markerFace('flag') : String(++number);
         const icon = L.divIcon({ className: origin ? 'origin-marker draft-stop' : 'route-stop draft-stop', html: label,
           iconSize: origin ? [34, 34] : [28, 28], iconAnchor: origin ? [17, 17] : [14, 14] });
@@ -333,7 +341,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
         }).addTo(routeLayer);
       }
       for (const [index, stop] of stops.entries()) {
-        if (!stop.location || stop.type === 'origin') continue;
+        if (!stop.location || stop.type === 'origin' || stop.type === 'return') continue;
         const popup = document.createElement('a');
         popup.href = stop.url;
         popup.textContent = nameFor(stop);

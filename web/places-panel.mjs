@@ -95,6 +95,7 @@ export function placesPanel(city, language, signal, open, selection) {
   let draft;
   let route = { legs: [], stops: [] };
   let origin = null;
+  let destination = null, destinationTitle;
   let startSelection;
   function cancelStartSelection() {
     const action = startSelection;
@@ -105,6 +106,7 @@ export function placesPanel(city, language, signal, open, selection) {
   }
   function configureOrigin() {
     map.setOrigin(origin, text.origin);
+    map.setDestination(destination, destinationTitle);
     if (startSelection) map.pickStart(point => {
       const action = startSelection;
       startSelection = undefined;
@@ -343,10 +345,15 @@ export function placesPanel(city, language, signal, open, selection) {
       mapBox.scrollIntoView({ block: 'center', behavior: 'auto' });
     },
     setOrigin(point) { origin = point; map?.setOrigin(point, text.origin); },
+    setDestination(point, title) { destination = point; destinationTitle = title; map?.setDestination(point, title); },
     cancelStartSelection,
-    pickStart(pick, cancel) {
+    pickStart(pick, cancel, purpose = 'start') {
       startSelection = { pick, cancel };
       pickerBox.hidden = false;
+      pickHint.textContent = purpose === 'return' ? (language === 'ru'
+        ? 'Выберите точку возвращения на карте. С клавиатуры перемещайте карту стрелками и нажмите Enter. Escape отменяет выбор.'
+        : 'Choose the return point on the map. Pan with arrow keys and press Enter. Escape cancels.') : text.pickHint;
+      iconLabel(cancelPick, 'x', purpose === 'return' ? (language === 'ru' ? 'Отменить выбор возвращения' : 'Cancel return point selection') : text.cancelPick);
       details.open = true;
       ensureMap();
       configureOrigin();

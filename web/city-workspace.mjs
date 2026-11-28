@@ -66,7 +66,7 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   const zoneValue = document.createElement('strong');
   zoneValue.textContent = city.timezone || 'UTC';
   zone.append(zoneTitle, zoneValue);
-  trip.append(itinerary.controls.date, itinerary.controls.start, itinerary.controls.end, zone);
+  trip.append(itinerary.controls.date, itinerary.controls.start, itinerary.controls.end, zone, itinerary.controls.returnTrip);
   const autoPlan = autoPlanPanel(city, language, itinerary, places, storage, signal, selection?.pace, selection?.interests);
   trip.append(autoPlan.controls);
 

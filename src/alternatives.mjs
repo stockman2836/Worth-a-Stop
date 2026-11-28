@@ -37,6 +37,8 @@ export async function findAlternatives(stops, id, legs, start, timeZone, { signa
     const nextEvent = trial.findIndex((stop, i) => i > index && stop.type === 'event');
     if (nextEvent >= 0 && (times[nextEvent].arrival === null || !Number.isFinite(trial[nextEvent].start) ||
         times[nextEvent].late > 0 || times[nextEvent].reason === 'event-ended')) continue;
+    const destination = trial.findIndex(stop => stop.type === 'return');
+    if (destination >= 0 && (times[destination].arrival === null || times[destination].late > 0)) continue;
     alternatives.push({ stop: replacement, km: place.km, arrival: visit.arrival, departure: visit.departure });
   }
   return { alternatives, stale, incomplete };

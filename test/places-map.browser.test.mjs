@@ -53,6 +53,10 @@ test('map lifecycle preserves wheel zoom, localized vector styles, theme, attrib
       const localized = placesMap(box, city, [place], { ...labels, language: 'ru', mapLoading: 'Loading', mapFallback: 'Fallback' }, () => {});
       await wait(() => box.dataset.basemap === 'vector' && box.dataset.mapLanguage === 'ru');
       const leaflet = currentMap; leaflet.setView([44.51, 34.24], 12, { animate: false });
+      localized.setDestination(city, 'Return point');
+      if (!box.querySelector('.return-marker[title="Return point"]')) throw Error('Return point must have its own map flag');
+      localized.setDestination(null);
+      if (box.querySelector('.return-marker')) throw Error('Disabling return must remove its map flag');
       let vector; leaflet.eachLayer(layer => { if (layer.getMaplibreMap) vector = layer.getMaplibreMap(); });
       const ruExpression = JSON.stringify(vector.getLayoutProperty('names', 'text-field'));
       document.documentElement.dataset.theme = 'dark';

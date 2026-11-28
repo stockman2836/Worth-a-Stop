@@ -2,12 +2,16 @@ import { generateDayPlan } from './auto-plan.mjs';
 import { placeName } from './place-name.mjs';
 import { loadPlanCandidates } from './plan-candidates.mjs';
 import { localInstant } from './opening-hours.mjs';
-import { withStartingPoint } from './starting-point.mjs';
+import { validReturnTrip, withTripEndpoints } from './return-trip.mjs';
 import { iconLabel } from './icons.mjs';
 import { interestIds, interestKey, normalizeInterests, readInterests, saveInterests } from './travel-interests.mjs';
 
 const copy = {
   ru: { pace: 'Темп прогулки', paces: { relaxed: 'Спокойный', balanced: 'Обычный', active: 'Насыщенный' },
+    returnPoint: 'Выбери точку возвращения: точку старта или другую точку на карте.',
+    returnBuffer: 'Укажи запас от 0 до 120 минут и оставь время на прогулку до отправления.',
+    returnTitle: 'Возвращение', returnEmpty: 'Не удалось подобрать прогулку с подтверждённым возвращением вовремя. Измени время или точку возвращения.',
+    returnNote: (arrival, by, buffer) => `Возвращение: ${arrival} · Прибыть не позже ${by} · Запас до отправления: ${buffer} мин.`,
     interests: 'Что тебе интересно?', interestNames: { history: 'История', architecture: 'Архитектура', museums: 'Музеи', nature: 'Природа', art: 'Искусство' },
     interestHint: 'Можно выбрать несколько. Без выбора — сбалансированный маршрут. Время работы и переходы проверяются в любом случае.',
     interestUnsaved: 'Выбор доступен в этой вкладке, но сохранить его на устройстве не удалось.', clearInterests: 'Снять выбор',
@@ -31,6 +35,10 @@ const copy = {
     skipped: 'Некоторые события пропущены: неподходящее время, отсутствие данных или недоступный сеанс.',
     map: 'Предложение на карте', mapHint: 'Пунктир и оранжевые номера на карте — предлагаемый маршрут.', stops: 'Остановки предложения' },
   en: { pace: 'Walking pace', paces: { relaxed: 'Relaxed', balanced: 'Balanced', active: 'Active' },
+    returnPoint: 'Choose a return point: your starting point or another point on the map.',
+    returnBuffer: 'Choose a buffer from 0 to 120 minutes and leave time for the walk before departure.',
+    returnTitle: 'Return', returnEmpty: 'No walk with a verified return before the deadline could be built. Change the time or return point.',
+    returnNote: (arrival, by, buffer) => `Return: ${arrival} · Arrive no later than ${by} · Buffer before departure: ${buffer} min.`,
     interests: 'Your interests', interestNames: { history: 'History', architecture: 'Architecture', museums: 'Museums', nature: 'Nature', art: 'Art' },
     interestHint: 'Choose any combination. Leave empty for a balanced walk. Opening hours and walking times are checked in every case.',
     interestUnsaved: 'Your choice is available in this tab but could not be saved on this device.', clearInterests: 'Clear selection',
@@ -141,6 +149,11 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
       itinerary.controls[!context.startTime ? 'start' : 'end'].querySelector('input').focus();
       return;
     }
+    if (!validReturnTrip(context.returnTrip ?? null) || context.returnTrip && end - context.returnTrip.bufferMinutes * 60000 <= start) {
+      message.textContent = context.returnTrip?.point ? text.returnBuffer : text.returnPoint;
+      itinerary.controls.returnTrip?.querySelector(context.returnTrip?.point ? '.return-buffer' : '.return-mode')?.focus();
+      return;
+    }
     const interests = getInterests();
     expected = context; signature = fingerprint();
     const controller = new AbortController(); active = controller;
@@ -155,12 +168,13 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
       if (signature !== fingerprint()) { invalidate(); return; }
       proposal = result;
       if (!result.stops.length) {
-        message.textContent = text.empty;
+        message.textContent = context.returnTrip ? text.returnEmpty : text.empty;
         note.textContent = [(candidates.incomplete || result.failedRoutes || result.limited) && text.partial, result.skippedEvents > 0 && text.skipped].filter(Boolean).join(' ');
         return;
       }
       message.textContent = text.summary(result.stops.length, result.walkingMinutes, clock.format(result.finish));
       note.textContent = [text.unchanged, text.estimates, !context.origin && text.firstStop,
+        result.returnTrip && text.returnNote(clock.format(result.returnTrip.arrival), clock.format(result.returnTrip.deadline), result.returnTrip.bufferMinutes),
         (candidates.incomplete || result.failedRoutes || result.limited) && text.partial,
         candidates.stalePlaces && text.stale, result.unverifiedHours > 0 && text.unknown, result.skippedEvents > 0 && text.skipped,
         interests.length && !result.entries.some(entry => entry.interests.length) && text.noInterestMatches].filter(Boolean).join(' ');
@@ -177,6 +191,13 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
           entry.interests.length && text.interestMatch + ': ' + entry.interests.map(id => text.interestNames[id]).join(', ')].filter(Boolean).join(' · ');
         item.append(time, link, reason); list.append(item);
       }
+      if (result.returnTrip) {
+        const item = document.createElement('li'); item.className = 'auto-plan-return';
+        const time = document.createElement('span'); time.className = 'event-time'; time.textContent = clock.format(result.returnTrip.arrival);
+        const link = document.createElement('a'); link.href = result.returnTrip.stop.url; link.textContent = text.returnTitle;
+        const reason = document.createElement('p'); reason.textContent = text.walk(Math.ceil(result.returnTrip.leg.duration / 60));
+        item.append(time, link, reason); list.append(item);
+      }
       actions.hidden = false; iconLabel(apply, 'check', context.stops.length ? text.replace : text.apply);
       iconLabel(run, 'sparkles', text.again);
     } catch (error) {
@@ -188,7 +209,8 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
   });
   map.addEventListener('click', () => {
     if (!proposal || fingerprint() !== signature) { invalidate(); return; }
-    timeline.showDraft(proposal.legs, withStartingPoint(proposal.stops, expected.origin, text.origin)); mapHint.hidden = false;
+    timeline.showDraft(proposal.legs, withTripEndpoints(proposal.stops, expected.origin, expected.returnTrip, {
+      originTitle: text.origin, returnTitle: text.returnTitle, deadline: proposal.returnTrip?.deadline })); mapHint.hidden = false;
   });
   apply.addEventListener('click', () => {
     if (!proposal || !proposal.stops.length || fingerprint() !== signature) { invalidate(); return; }

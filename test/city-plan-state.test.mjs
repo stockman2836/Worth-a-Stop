@@ -24,7 +24,7 @@ test('resets all dates and planning preferences for one city while preserving ot
     saved.setItem(`worth-a-stop.itinerary.day.${city}`, next);
     saved.setItem(`worth-a-stop.auto-plan.pace.${city}`, 'active');
   }
-  const preserved = ['worth-a-stop.language', 'worth-a-stop.theme', 'worth-a-stop.places.v4.city.9001.50.14', 'unrelated.key'];
+  const preserved = ['worth-a-stop.language', 'worth-a-stop.theme', 'worth-a-stop.travel-interests.v1', 'worth-a-stop.places.v4.city.9001.50.14', 'unrelated.key'];
   for (const key of preserved) saved.setItem(key, 'keep');
   assert.deepEqual(resetCityPlans(id, saved), { saved: true });
   for (const date of [day, next]) {

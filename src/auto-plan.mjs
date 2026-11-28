@@ -4,6 +4,7 @@ import { arrivalTimes } from './arrival-times.mjs';
 import { localInstant, visitOpeningState } from './opening-hours.mjs';
 import { withStartingPoint } from './starting-point.mjs';
 import { eventLocation } from './event-location.mjs';
+import { interestIds, normalizeInterests, matchingInterests, shortlistPlaces } from './travel-interests.mjs';
 
 const paces = { relaxed: { factor: 1.3, stops: 4, walk: 25 }, balanced: { factor: 1, stops: 6, walk: 35 }, active: { factor: .8, stops: 8, walk: 45 } };
 const visits = { museum: 75, gallery: 50, cathedral: 40, castle: 60, park: 35, garden: 35, viewpoint: 20, marketplace: 30 };
@@ -16,17 +17,19 @@ function distance(a, b) {
   return 12742 * Math.asin(Math.sqrt(Math.min(1, h)));
 }
 
-export async function generateDayPlan({ day, startTime, endTime, timeZone, pace = 'balanced', origin = null, places = [], events = [] },
+export async function generateDayPlan({ day, startTime, endTime, timeZone, pace = 'balanced', interests = [], origin = null, places = [], events = [] },
   { signal, fetchResponse = fetch, onProgress = () => {} } = {}) {
   const start = timeZone && localInstant(day, startTime, timeZone);
   const end = timeZone && localInstant(day, endTime, timeZone);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || !Object.hasOwn(paces, pace) ||
+      !Array.isArray(interests) || interests.some(id => !interestIds.includes(id)) ||
       origin !== null && !eventLocation(origin?.latitude, origin?.longitude)) throw Error('Invalid planning options');
   signal?.throwIfAborted();
   const profile = paces[pace];
+  interests = normalizeInterests(interests);
   const candidates = [], ids = new Set();
   let skippedEvents = 0;
-  for (const [items, type] of [[places.slice(0, 12), 'place'], [events, 'event']]) {
+  for (const [items, type] of [[shortlistPlaces(places, interests, origin), 'place'], [events, 'event']]) {
     for (const item of items) {
       try {
         const stop = itineraryStop(item, type);
@@ -35,7 +38,7 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
         if (type === 'event' && ([3, 4, 5, 6].includes(item.status) || !Number.isFinite(stop.start) ||
             !Number.isFinite(stop.end) || stop.end <= stop.start || stop.start < start || stop.end > end)) { skippedEvents++; continue; }
         if (type === 'place') stop.duration = Math.round(((visits[item.category] || 40) * profile.factor) / 5) * 5;
-        candidates.push({ stop, category: item.category || type, order: candidates.length });
+        candidates.push({ stop, category: item.category || type, interests: type === 'place' ? matchingInterests(item.category, interests) : [], order: candidates.length });
         ids.add(stop.id);
       } catch { if (type === 'event') skippedEvents++; }
     }
@@ -73,7 +76,7 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
     if (!['fits', 'unknown', 'event'].includes(hours)) return null;
     const walking = leg ? Math.ceil(leg.duration / 60) : 0;
     const variety = !categories.has(candidate.category);
-    const score = (hours === 'fits' ? 12 : hours === 'event' ? 24 : 0) + (variety ? 5 : 0) - walking * .2 - timing.waiting * .15 - candidate.order * .01;
+    const score = (hours === 'fits' ? 12 : hours === 'event' ? 24 : 0) + (candidate.interests.length ? 12 : 0) + (variety ? 5 : 0) - walking * .2 - timing.waiting * .15 - candidate.order * .01;
     return { candidate, leg, timing, hours, walking, variety, score };
   }
   while (stops.length < profile.stops && pool.length) {
@@ -83,7 +86,7 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
     const ranked = pool.filter(c => c.stop.type !== 'event' || c.stop.start >= now).map(c => ({ candidate: c,
       priority: (c.stop.type === 'event' ? 18 - (c.stop.start - now) / 600000 :
         visitOpeningState(c.stop.hours, now, now + c.stop.duration * 60000, timeZone).state === 'fits' ? 10 : 0) -
-        distance(point, c.stop.location) * 2 + (!categories.has(c.category) ? 2 : 0) }))
+        distance(point, c.stop.location) * 2 + (c.interests.length ? 12 : 0) + (!categories.has(c.category) ? 2 : 0) }))
       .sort((a,b) => b.priority - a.priority || a.candidate.order - b.candidate.order).map(c => c.candidate);
     let chosen;
     for (let offset = 0; offset < ranked.length && !chosen; offset += 4) {
@@ -93,7 +96,7 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
     if (!chosen) break;
     stops.push(chosen.candidate.stop);
     if (chosen.leg) legs.push(chosen.leg);
-    entries.push({ stop: chosen.candidate.stop, ...chosen.timing, hours: chosen.hours, walkingMinutes: chosen.walking, variety: chosen.variety });
+    entries.push({ stop: chosen.candidate.stop, ...chosen.timing, hours: chosen.hours, walkingMinutes: chosen.walking, variety: chosen.variety, interests: chosen.candidate.interests });
     categories.add(chosen.candidate.category);
     pool.splice(pool.indexOf(chosen.candidate), 1);
     onProgress({ stops: stops.length, routeChecks: checks });
@@ -101,5 +104,5 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
   signal?.throwIfAborted();
   return { stops, entries, legs, start, end, finish: entries.at(-1)?.departure ?? start,
     walkingMinutes: legs.reduce((sum, leg) => sum + Math.ceil(leg.duration / 60), 0),
-    failedRoutes, limited, skippedEvents, unverifiedHours: entries.filter(entry => entry.hours === 'unknown').length };
+    interests, failedRoutes, limited, skippedEvents, unverifiedHours: entries.filter(entry => entry.hours === 'unknown').length };
 }

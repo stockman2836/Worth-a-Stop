@@ -67,7 +67,7 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   zoneValue.textContent = city.timezone || 'UTC';
   zone.append(zoneTitle, zoneValue);
   trip.append(itinerary.controls.date, itinerary.controls.start, itinerary.controls.end, zone);
-  const autoPlan = autoPlanPanel(city, language, itinerary, places, storage, signal, selection?.pace);
+  const autoPlan = autoPlanPanel(city, language, itinerary, places, storage, signal, selection?.pace, selection?.interests);
   trip.append(autoPlan.controls);
 
   const grid = document.createElement('div');
@@ -156,6 +156,6 @@ export function cityWorkspace(city, language, calendarCopy, storage, signal, sel
   return {
     element,
     announceReset(message) { resetStatus.textContent = message; },
-    selection() { return { ...places.selection(), tab: panels[1].hidden ? 'places' : 'events', pace: autoPlan.getPace() }; },
+    selection() { return { ...places.selection(), tab: panels[1].hidden ? 'places' : 'events', pace: autoPlan.getPace(), interests: autoPlan.getInterests() }; },
   };
 }

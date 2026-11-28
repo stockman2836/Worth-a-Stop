@@ -96,9 +96,44 @@ test('stops after the route-check budget instead of making unbounded requests', 
 });
 
 test('validates local time windows before making requests, including DST ambiguity', async () => {
-  for (const change of [{ endTime: '08:00' }, { timeZone: null }, { day: '2026-10-25', startTime: '02:30' }, { pace: 'unsupported' }]) {
+  for (const change of [{ endTime: '08:00' }, { timeZone: null }, { day: '2026-10-25', startTime: '02:30' }, { pace: 'unsupported' }, { interests: 'nature' }, { interests: ['unsupported'] }]) {
     await assert.rejects(generateDayPlan({ ...input, ...change, places: [place(1)] }, { fetchResponse: () => { throw Error('Unexpected route'); } }), /Invalid planning/);
   }
+});
+
+test('interests affect the shortlist before its cutoff and explain a different first stop', async () => {
+  const places = [...Array.from({ length: 25 }, (_, i) => place(i + 1, '24/7', 'museum')), place(100, '24/7', 'park')];
+  const balanced = await generateDayPlan({ ...input, endTime: '10:30', places }, { fetchResponse: route });
+  const personalized = await generateDayPlan({ ...input, endTime: '10:30', interests: ['nature'], places }, { fetchResponse: route });
+  assert.equal(balanced.stops[0].title, 'Place 1');
+  assert.equal(personalized.stops[0].title, 'Place 100');
+  assert.deepEqual(personalized.entries[0].interests, ['nature']);
+  assert(personalized.finish <= personalized.end);
+  const unchanged = await generateDayPlan({ ...input, endTime: '10:30', interests: [], places }, { fetchResponse: route });
+  assert.deepEqual(unchanged, balanced);
+});
+
+test('favourite closed places and overlong walks remain excluded; viable general alternatives survive', async () => {
+  const origin = { latitude: 47.49, longitude: 19 };
+  const places = [place(1, '24/7', 'museum'), place(2, 'off', 'park'), place(3, '24/7', 'garden')];
+  const result = await generateDayPlan({ ...input, origin, interests: ['nature'], places }, { fetchResponse: async url => {
+    const to = new URL(url, 'https://app.example').searchParams.get('toLon');
+    const data = await (await route(url)).json();
+    return Response.json({ ...data, duration: +to === places[2].longitude ? 3600 : data.duration });
+  } });
+  assert.deepEqual(result.stops.map(stop => stop.title), ['Place 1']);
+  assert.deepEqual(result.entries[0].interests, []);
+  assert.equal(result.entries[0].hours, 'fits');
+});
+
+test('personalization keeps the routing budget bounded and cannot add stops beyond the available time', async () => {
+  let requests = 0;
+  const result = await generateDayPlan({ ...input, endTime: '22:00', pace: 'active', interests: ['nature'],
+    places: Array.from({ length: 100 }, (_, i) => place(i + 1, '24/7', 'park')) }, {
+    fetchResponse: async url => { requests++; return route(url); },
+  });
+  assert(requests <= 24); assert(result.stops.length <= 8); assert(result.finish <= result.end);
+  assert(result.entries.every(entry => entry.interests.includes('nature')));
 });
 
 test('loads the selected date, keeps surviving sources and labels stale place suggestions', async () => {

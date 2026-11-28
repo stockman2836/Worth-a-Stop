@@ -4,9 +4,14 @@ import { loadPlanCandidates } from './plan-candidates.mjs';
 import { localInstant } from './opening-hours.mjs';
 import { withStartingPoint } from './starting-point.mjs';
 import { iconLabel } from './icons.mjs';
+import { interestIds, interestKey, normalizeInterests, readInterests, saveInterests } from './travel-interests.mjs';
 
 const copy = {
   ru: { pace: 'Темп прогулки', paces: { relaxed: 'Спокойный', balanced: 'Обычный', active: 'Насыщенный' },
+    interests: 'Что тебе интересно?', interestNames: { history: 'История', architecture: 'Архитектура', museums: 'Музеи', nature: 'Природа', art: 'Искусство' },
+    interestHint: 'Можно выбрать несколько. Без выбора — сбалансированный маршрут. Время работы и переходы проверяются в любом случае.',
+    interestUnsaved: 'Выбор доступен в этой вкладке, но сохранить его на устройстве не удалось.', clearInterests: 'Снять выбор',
+    interestMatch: 'По твоим интересам', noInterestMatches: 'В выполнимом маршруте не нашлось мест по выбранным интересам. Показаны другие варианты.',
     generate: 'Составить день', again: 'Пересчитать', cancel: 'Отменить', title: 'Предложение для твоего дня',
     gathering: 'Собираю места и события…', checking: n => `Проверяю переходы и расписания. Выбрано остановок: ${n}.`,
     validation: 'Укажи дату, время начала и более позднее время окончания в тот же день.',
@@ -26,6 +31,10 @@ const copy = {
     skipped: 'Некоторые события пропущены: неподходящее время, отсутствие данных или недоступный сеанс.',
     map: 'Предложение на карте', mapHint: 'Пунктир и оранжевые номера на карте — предлагаемый маршрут.', stops: 'Остановки предложения' },
   en: { pace: 'Walking pace', paces: { relaxed: 'Relaxed', balanced: 'Balanced', active: 'Active' },
+    interests: 'Your interests', interestNames: { history: 'History', architecture: 'Architecture', museums: 'Museums', nature: 'Nature', art: 'Art' },
+    interestHint: 'Choose any combination. Leave empty for a balanced walk. Opening hours and walking times are checked in every case.',
+    interestUnsaved: 'Your choice is available in this tab but could not be saved on this device.', clearInterests: 'Clear selection',
+    interestMatch: 'Matches your interests', noInterestMatches: 'No places matching your interests fit the feasible route. Showing other options.',
     generate: 'Plan my day', again: 'Recalculate', cancel: 'Cancel', title: 'A suggestion for your day',
     gathering: 'Gathering places and events…', checking: n => `Checking walks and schedules. Stops selected: ${n}.`,
     validation: 'Choose a date, a start time and a later finish time on the same day.',
@@ -46,7 +55,7 @@ const copy = {
     map: 'Preview on map', mapHint: 'Dashed paths and orange numbers show the proposed route.', stops: 'Suggested stops' },
 };
 
-export function autoPlanPanel(city, language, itinerary, timeline, storage, signal, initialPace) {
+export function autoPlanPanel(city, language, itinerary, timeline, storage, signal, initialPace, initialInterests) {
   const text = copy[language];
   const controls = document.createElement('div');
   controls.className = 'auto-plan-controls';
@@ -62,7 +71,27 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
   paceLabel.append(text.pace, pace);
   const run = document.createElement('button'); run.type = 'button'; run.className = 'generate-day'; iconLabel(run, 'sparkles', text.generate);
   const cancel = document.createElement('button'); cancel.type = 'button'; iconLabel(cancel, 'x', text.cancel); cancel.hidden = true;
-  controls.append(paceLabel, run, cancel);
+  const interestsBox = document.createElement('fieldset'); interestsBox.className = 'auto-plan-interests';
+  const legend = document.createElement('legend'); legend.textContent = text.interests;
+  const choices = document.createElement('div'); choices.className = 'interest-choices';
+  const interestNote = document.createElement('p'); interestNote.className = 'interest-hint'; interestNote.setAttribute('role', 'status');
+  const checkboxes = new Map();
+  let preferences = readInterests(storage);
+  const selected = normalizeInterests(initialInterests ?? preferences.interests);
+  for (const id of interestIds) {
+    const label = document.createElement('label'); label.className = 'interest-option';
+    const input = document.createElement('input'); input.type = 'checkbox'; input.value = id; input.checked = selected.includes(id);
+    label.append(input, document.createTextNode(text.interestNames[id])); choices.append(label); checkboxes.set(id, input);
+  }
+  const getInterests = () => interestIds.filter(id => checkboxes.get(id).checked);
+  const resetInterests = document.createElement('button'); resetInterests.type = 'button'; resetInterests.className = 'clear-interests'; resetInterests.textContent = text.clearInterests;
+  choices.append(resetInterests); interestsBox.append(legend, choices, interestNote);
+  function showInterestNote() {
+    interestNote.textContent = [text.interestHint, !preferences.saved && text.interestUnsaved].filter(Boolean).join(' ');
+    resetInterests.disabled = !getInterests().length;
+  }
+  showInterestNote();
+  controls.append(interestsBox, paceLabel, run, cancel);
   const element = document.createElement('section'); element.className = 'auto-plan-preview'; element.hidden = true;
   const heading = document.createElement('h2'); heading.textContent = text.title;
   const message = document.createElement('p'); message.setAttribute('role', 'status');
@@ -76,7 +105,7 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
   element.append(heading, message, note, list, actions, mapHint);
   const clock = new Intl.DateTimeFormat(language, { timeZone: city.timezone || 'UTC', hour: '2-digit', minute: '2-digit' });
   let active, proposal, expected, signature;
-  const fingerprint = () => JSON.stringify([itinerary.context(), pace.value]);
+  const fingerprint = () => JSON.stringify([itinerary.context(), pace.value, getInterests()]);
   function clear() {
     active?.abort(); active = undefined; proposal = expected = signature = undefined;
     timeline.clearDraft(); list.replaceChildren(); actions.hidden = true; note.textContent = ''; mapHint.hidden = true;
@@ -87,6 +116,15 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
     clear(); element.hidden = false; message.textContent = text.changed;
   }
   itinerary.onChange(invalidate);
+  function changeInterests() { preferences = saveInterests(getInterests(), storage); showInterestNote(); invalidate(); }
+  for (const input of checkboxes.values()) input.addEventListener('change', changeInterests);
+  resetInterests.addEventListener('click', () => { for (const input of checkboxes.values()) input.checked = false; changeInterests(); });
+  window.addEventListener('storage', event => {
+    if (event.key !== interestKey && event.key !== null) return;
+    preferences = readInterests(storage);
+    for (const [id, input] of checkboxes) input.checked = preferences.interests.includes(id);
+    showInterestNote(); invalidate();
+  }, { signal });
   pace.addEventListener('change', () => {
     try { storage?.setItem(preference, pace.value); } catch { /* Keep the choice in this view. */ }
     invalidate();
@@ -103,13 +141,14 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
       itinerary.controls[!context.startTime ? 'start' : 'end'].querySelector('input').focus();
       return;
     }
+    const interests = getInterests();
     expected = context; signature = fingerprint();
     const controller = new AbortController(); active = controller;
     const combined = AbortSignal.any([signal, controller.signal, AbortSignal.timeout(90000)]);
     run.disabled = true; cancel.hidden = false; message.textContent = text.gathering; message.setAttribute('aria-busy', 'true');
     try {
       const candidates = await loadPlanCandidates(city, context.day, { signal: combined, storage });
-      const result = await generateDayPlan({ ...context, timeZone: city.timezone, pace: pace.value, ...candidates }, {
+      const result = await generateDayPlan({ ...context, timeZone: city.timezone, pace: pace.value, interests, ...candidates }, {
         signal: combined, onProgress: progress => { if (active === controller) message.textContent = text.checking(progress.stops); },
       });
       if (active !== controller || signal.aborted) return;
@@ -123,7 +162,8 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
       message.textContent = text.summary(result.stops.length, result.walkingMinutes, clock.format(result.finish));
       note.textContent = [text.unchanged, text.estimates, !context.origin && text.firstStop,
         (candidates.incomplete || result.failedRoutes || result.limited) && text.partial,
-        candidates.stalePlaces && text.stale, result.unverifiedHours > 0 && text.unknown, result.skippedEvents > 0 && text.skipped].filter(Boolean).join(' ');
+        candidates.stalePlaces && text.stale, result.unverifiedHours > 0 && text.unknown, result.skippedEvents > 0 && text.skipped,
+        interests.length && !result.entries.some(entry => entry.interests.length) && text.noInterestMatches].filter(Boolean).join(' ');
       for (const entry of result.entries) {
         const item = document.createElement('li');
         const time = document.createElement('span'); time.className = 'event-time'; time.textContent = clock.format(entry.stop.type === 'event' ? entry.stop.start : entry.arrival) + '–' + clock.format(entry.departure);
@@ -133,7 +173,8 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
         reason.textContent = [entry.hours === 'event' ? text.event : entry.hours === 'fits' ? text.verified : text.unknown,
           entry.stop.type === 'place' && text.duration(entry.stop.duration), entry.walkingMinutes > 0 && text.walk(entry.walkingMinutes),
           entry.waiting > 0 && text.arrive(clock.format(entry.arrival)), entry.waiting > 0 && text.wait(entry.waiting),
-          entry.variety && entry.stop.type === 'place' && text.variety].filter(Boolean).join(' · ');
+          entry.variety && entry.stop.type === 'place' && text.variety,
+          entry.interests.length && text.interestMatch + ': ' + entry.interests.map(id => text.interestNames[id]).join(', ')].filter(Boolean).join(' · ');
         item.append(time, link, reason); list.append(item);
       }
       actions.hidden = false; iconLabel(apply, 'check', context.stops.length ? text.replace : text.apply);
@@ -157,5 +198,5 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
       const title = itinerary.element.querySelector('h2'); title.tabIndex = -1; title.focus({ preventScroll: true });
     } catch { clear(); message.textContent = text.changed; }
   });
-  return { element, controls, getPace: () => pace.value };
+  return { element, controls, getPace: () => pace.value, getInterests };
 }

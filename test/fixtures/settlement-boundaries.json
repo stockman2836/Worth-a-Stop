@@ -1,0 +1,72 @@
+[
+  {
+    "type": "relation",
+    "id": 36989,
+    "bounds": {
+      "minlat": 41.9002048,
+      "minlon": 12.4457878,
+      "maxlat": 41.9073829,
+      "maxlon": 12.4583653
+    },
+    "tags": {
+      "admin_level": "2",
+      "boundary": "administrative",
+      "city": "yes",
+      "name": "Civitas Vaticana - Città del Vaticano",
+      "name:en": "Vatican City",
+      "name:ru": "Ватикан",
+      "type": "boundary"
+    }
+  },
+  {
+    "type": "relation",
+    "id": 3005461,
+    "bounds": {
+      "minlat": 44.4770219,
+      "minlon": 34.1094044,
+      "maxlat": 44.5271162,
+      "maxlon": 34.1940719
+    },
+    "tags": {
+      "name": "Ялта",
+      "name:en": "Yalta",
+      "name:ru": "Ялта",
+      "place": "town",
+      "type": "multipolygon"
+    }
+  },
+  {
+    "type": "relation",
+    "id": 3030976,
+    "bounds": {
+      "minlat": 44.5122525,
+      "minlon": 33.3779569,
+      "maxlat": 44.7014019,
+      "maxlon": 33.6106217
+    },
+    "tags": {
+      "name": "Севастополь",
+      "name:en": "Sevastopol",
+      "name:ru": "Севастополь",
+      "place": "city",
+      "type": "multipolygon"
+    }
+  },
+  {
+    "type": "relation",
+    "id": 3598392,
+    "bounds": {
+      "minlat": 44.51282,
+      "minlon": 34.2273553,
+      "maxlat": 44.5197511,
+      "maxlon": 34.2450911
+    },
+    "tags": {
+      "name": "Никита",
+      "name:en": "Nikita",
+      "name:ru": "Никита",
+      "place": "town",
+      "type": "multipolygon"
+    }
+  }
+]

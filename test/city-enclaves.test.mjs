@@ -84,6 +84,30 @@ test('optional territory failures keep the host catalogue available and labelled
   assert.equal(result.places.length, 1); assert.equal(result.incomplete, true);
 });
 
+test('early city preview and enclave records survive a later whole-city batch', async () => {
+  let finishHost;
+  const hostPending = new Promise(resolve => { finishHost = resolve; });
+  const snapshots = [];
+  const result = await nearbyPlaces(city, { scope: 'city',
+    resolveBoundary: async () => ({ ...boundary, bounds: { ...box, maxlat: .2, maxlon: .2 } }),
+    onProgress: snapshot => snapshots.push(snapshot),
+    fetchResponse: async url => {
+      if (url.hostname === 'download.geofabrik.de') return new Response(null, { status: 503 });
+      const query = url.searchParams.get('data');
+      if (query.includes('rel(200)')) {
+        assert(snapshots.some(snapshot => snapshot.places.some(place => place.name === 'Site 1')));
+        finishHost();
+        return Response.json({ elements: [{ type: 'area', id: 3600000200 }, point(2, .025)] });
+      }
+      if (!query.includes('(0,0,0.1,0.1)')) return Response.json({ elements: [point(1, .01)] });
+      await hostPending;
+      return Response.json({ elements: [point(1, .01), point(3, .05)] });
+    } });
+  assert.deepEqual(new Set(result.places.map(place => place.name)), new Set(['Site 1', 'Site 2', 'Site 3']));
+  assert.equal(result.places.find(place => place.name === 'Site 2').territory.countryCode, 'VA');
+  assert.equal(result.incomplete, undefined);
+});
+
 test('optional topology discovery runs after the host is published and cannot discard its places', async () => {
   let published = false;
   const { enclaves, ...undiscovered } = boundary;

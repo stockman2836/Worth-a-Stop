@@ -10,7 +10,7 @@ export async function cityBoundary(city, options = {}) {
   if (!Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180 ||
       !Number.isSafeInteger(id) || id < 1 || typeof name !== 'string' || !name.trim() || name.length > 200) throw Error('Invalid city');
   // Only consider boundaries containing the selected point, never a worldwide name match.
-  const elements = await overpassQuery(`is_in(${latitude},${longitude});area._[boundary=administrative]->.boundaries;rel(pivot.boundaries);rel._[admin_level~"^(4|5|6|7|8|9|10)$"];out body bb;`, {
+  const elements = await overpassQuery(`is_in(${latitude},${longitude})->.all;(area.all[boundary=administrative][admin_level~"^(4|5|6|7|8|9|10)$"];area.all[boundary=administrative][admin_level=2][city=yes];area.all[place~"^(city|town|village|hamlet|municipality)$"];)->.boundaries;rel(pivot.boundaries);out body bb;`, {
     ...options, extent: { minlat: latitude, maxlat: latitude, minlon: longitude, maxlon: longitude }, queryTimeout: 6,
   });
   const normalize = value => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[’']/g, '').replace(/\s+/g, ' ').trim();
@@ -19,17 +19,21 @@ export async function cityBoundary(city, options = {}) {
     const matches = [];
     for (const { type, id: relation, tags = {}, bounds, members } of elements) {
       const level = Number(tags.admin_level);
-      if (type !== 'relation' || !Number.isSafeInteger(relation) || relation < 1 || tags.boundary !== 'administrative' ||
-          !Number.isInteger(level) || level < 4 || level > 10 || typeof tags.name !== 'string') continue;
+      const cityState = tags.boundary === 'administrative' && level === 2 && tags.city === 'yes';
+      const administrative = tags.boundary === 'administrative' && Number.isInteger(level) && level >= 4 && level <= 10;
+      const settlement = !administrative && !cityState && /^(city|town|village|hamlet|municipality)$/.test(tags.place) &&
+        ['multipolygon', 'boundary'].includes(tags.type);
+      if (type !== 'relation' || !Number.isSafeInteger(relation) || relation < 1 ||
+          !(administrative || settlement || cityState) || typeof tags.name !== 'string') continue;
       const geonames = tags['geonames:id'];
       if (geonames && geonames !== String(id)) continue;
       const names = Object.entries(tags).filter(([key]) => /^(?:name|official_name|short_name|alt_name|int_name)(?::[\w-]+)?$/.test(key))
         .flatMap(([, value]) => typeof value === 'string' ? value.split(';') : []);
       const identity = geonames === String(id);
       if (!identity && !names.some(value => requested.includes(normalize(value)))) continue;
-      const score = (identity ? 100 : 0) + (/^(city|town|village|municipality)$/.test(tags.place) ? 20 : 0) + level;
+      const score = (identity ? 1000 : 0) + (settlement ? 100 : cityState ? 50 : /^(city|town|village|municipality)$/.test(tags.place) ? 20 : 0) + (Number.isFinite(level) ? level : 0);
       const innerWays = members?.filter(member => member.type === 'way' && member.role === 'inner').map(member => member.ref);
-      matches.push({ relation, name: tags.name, bounds, score, ...(innerWays && { innerWays }) });
+      matches.push({ relation, name: tags.name, bounds, score, kind: settlement ? 'settlement' : cityState ? 'city-state' : 'administrative', ...(innerWays && { innerWays }) });
     }
     return matches.sort((a, b) => b.score - a.score);
   }
@@ -55,8 +59,8 @@ export async function cityBoundary(city, options = {}) {
     }
   }
   if (!matches.length || matches.length > 1 && matches[0].score === matches[1].score) throw boundaryUnavailable();
-  const { relation, name: boundaryName, bounds, innerWays } = matches[0];
-  const boundary = { relation, name: boundaryName, bounds, innerWays, url: `https://www.openstreetmap.org/relation/${relation}` };
+  const { relation, name: boundaryName, bounds, innerWays, kind } = matches[0];
+  const boundary = { relation, name: boundaryName, bounds, innerWays, kind, url: `https://www.openstreetmap.org/relation/${relation}` };
   const shape = await cityBoundaryParts(boundary, city, options);
   return { ...boundary, ...shape };
 }

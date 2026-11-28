@@ -4,6 +4,7 @@ import { prominenceSignals, classifyProminence } from './place-prominence.mjs';
 import { categories, documentedCategories, placeElements } from './place-elements.mjs';
 import { validTerritory } from './territory.mjs';
 import { cityEnclaves } from './city-enclaves.mjs';
+import { initialCityBounds } from './place-preview.mjs';
 
 function importance(tags, translations) {
   const landmark = categories.building.includes(tags.building) || tags.tourism === 'attraction' || categories.historic.includes(tags.historic);
@@ -50,58 +51,92 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
     if (shape) boundary = { ...boundary, ...shape };
   }
   let inside = boundary?.segments ? containsPoint(boundary.segments) : null;
-  let records = [];
+  let hostRecords = [], previewRecords = [];
+  const territoryRecords = new Map();
   let enclaves = boundary?.enclaves ?? [];
   const describe = ({ bounds, ...territory }) => territory;
-  function collect(elements, territory) {
-    const additions = elements.map(element => {
-      const { territory: ignored, ...record } = element;
-      return territory ? { ...record, territory } : record;
-    });
-    if (territory) {
-      const ids = new Set(additions.map(element => `${element.type}/${element.id}`));
-      records = records.filter(element => !ids.has(`${element.type}/${element.id}`)).concat(additions);
-    } else {
-      records = additions;
+  const clean = elements => elements.map(({ territory: ignored, ...record }) => record);
+  function records() {
+    const key = element => `${element.type}/${element.id}`;
+    const hostIds = new Set(hostRecords.map(key));
+    let result = hostRecords.concat(previewRecords.filter(element => !hostIds.has(key(element))));
+    for (const additions of territoryRecords.values()) {
+      const ids = new Set(additions.map(key));
+      result = result.filter(element => !ids.has(key(element))).concat(additions);
     }
+    return result;
   }
-  const options = { signal, fetchResponse, queryCache,
-    onElements: onProgress ? elements => {
-      collect(elements);
-      const snapshot = present(records, true);
-      if (snapshot.places.length) onProgress(snapshot);
-    } : undefined };
-  let data;
-  try { data = await placeElements(city, boundary, options); }
-  catch (error) {
-    if (error.code !== 'PLACE_QUERY_TOO_LARGE' || !boundary || inside) throw error;
-    const shape = await cityBoundaryParts(boundary, city, { signal, fetchResponse, queryCache, force: true });
-    if (!shape) throw error;
-    boundary = { ...boundary, ...shape };
-    inside = containsPoint(shape.segments);
-    data = await placeElements(city, boundary, options);
+  let ready;
+  const primaryReady = new Promise(resolve => { ready = resolve; });
+  function report() {
+    const snapshot = present(records(), true);
+    if ((snapshot.places ?? snapshot).length) { ready(); onProgress?.(snapshot); }
   }
-  collect(data.elements);
-  let incomplete = Boolean(data.incomplete || boundary?.incomplete);
-  if (boundary?.innerWays?.length && boundary.enclaves === undefined) {
-    if (onProgress) onProgress(present(records, true));
-    try { enclaves = await cityEnclaves(boundary, { signal, fetchResponse, queryCache }); }
-    catch (error) { signal?.throwIfAborted(); incomplete = true; }
-  }
-  if (enclaves.length && onProgress) onProgress(present(records, true));
-  for (const enclave of enclaves) {
-    signal?.throwIfAborted();
+  const preview = onProgress && initialCityBounds(city, boundary);
+  if (preview) {
+    const timeout = AbortSignal.timeout(7000);
     try {
-      const additional = await placeElements(city, enclave, { signal, fetchResponse, queryCache });
-      collect(additional.elements, describe(enclave));
-      incomplete ||= additional.incomplete;
-      if (onProgress) onProgress(present(records, true));
-    } catch (error) {
+      const first = await placeElements(city, boundary, { fetchResponse, queryCache, queryBounds: preview,
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout });
+      previewRecords = clean(first.elements); report();
+    } catch (error) { signal?.throwIfAborted(); }
+  }
+  let incomplete = Boolean(boundary?.incomplete);
+  async function loadHost() {
+    const options = { signal, fetchResponse, queryCache, onElements: onProgress ? elements => {
+      hostRecords = clean(elements); report();
+    } : undefined };
+    try {
+      let data;
+      try { data = await placeElements(city, boundary, options); }
+      catch (error) {
+        if (error.code !== 'PLACE_QUERY_TOO_LARGE' || !boundary || inside) throw error;
+        const shape = await cityBoundaryParts(boundary, city, { signal, fetchResponse, queryCache, force: true });
+        if (!shape) throw error;
+        boundary = { ...boundary, ...shape }; inside = containsPoint(shape.segments);
+        data = await placeElements(city, boundary, options);
+      }
+      hostRecords = clean(data.elements);
+      incomplete ||= data.incomplete;
+      if (!data.incomplete) previewRecords = [];
+      report();
+    } finally { ready(); }
+  }
+  async function loadTerritories() {
+    if (!boundary?.innerWays?.length && !enclaves.length) return;
+    await primaryReady;
+    signal?.throwIfAborted();
+    if (boundary.innerWays?.length && boundary.enclaves === undefined) {
+      try { enclaves = await cityEnclaves(boundary, { signal, fetchResponse, queryCache }); }
+      catch (error) { signal?.throwIfAborted(); incomplete = true; return; }
+    }
+    for (const enclave of enclaves) {
       signal?.throwIfAborted();
-      incomplete = true;
+      try {
+        const additional = await placeElements(city, enclave, { signal, fetchResponse, queryCache });
+        territoryRecords.set(enclave.relation, clean(additional.elements).map(element => ({ ...element, territory: describe(enclave) })));
+        incomplete ||= additional.incomplete; report();
+      } catch (error) { signal?.throwIfAborted(); incomplete = true; }
     }
   }
-  return present(records, incomplete);
+  const outcomes = await Promise.allSettled([loadHost(), loadTerritories()]);
+  signal?.throwIfAborted();
+  const failure = outcomes.find(outcome => outcome.status === 'rejected');
+  if (failure) {
+    const available = present(records(), true);
+    if (!(available.places ?? available).length) throw failure.reason;
+    incomplete = true;
+  }
+  const result = present(records(), incomplete);
+  // A mapped settlement footprint can exclude its visitor sites. Keep that
+  // boundary explicit and label a separate nearby fallback, never a city result.
+  if (boundary?.kind === 'settlement' && !incomplete && !result.places.length) {
+    try {
+      const places = await nearbyPlaces(city, { signal, fetchResponse, scope: 'nearby', queryCache });
+      return { ...result, places, surroundings: true };
+    } catch (error) { signal?.throwIfAborted(); return { ...result, incomplete: true }; }
+  }
+  return result;
 
   function present(elements, incomplete) {
     const places = [];
@@ -140,7 +175,7 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
       if (!boundary && unique.length === 12) break;
     }
     const result = classifyProminence(unique);
-    return boundary ? { places: result, boundary: { name: boundary.name, url: boundary.url,
+    return boundary ? { places: result, boundary: { name: boundary.name, url: boundary.url, ...(boundary.kind && { kind: boundary.kind }),
       ...(enclaves.length && { enclaves: enclaves.map(describe) }) }, ...(incomplete && { incomplete }) } : result;
   }
 }

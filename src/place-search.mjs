@@ -104,7 +104,7 @@ export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
     return cached(results, key, 3600000, (onProgress, jobSignal) => discoverPlaces(city, {
       scope, fetchResponse, queryCache: diskCache, signal: jobSignal,
       onProgress: scope === 'city' ? onProgress : undefined,
-      resolveBoundary: () => cached(boundaries, 'boundary-v3/' + identity, 86400000,
+      resolveBoundary: () => cached(boundaries, 'boundary-v4/' + identity, 86400000,
         () => discoverBoundary(city, { fetchResponse, queryCache: diskCache,
           signal: AbortSignal.any([jobSignal, AbortSignal.timeout(35000)]) }), false, jobSignal),
     }), true, signal);

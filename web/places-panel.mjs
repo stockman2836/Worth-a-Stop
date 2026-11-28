@@ -10,6 +10,7 @@ import { territoryLabel } from './territory.mjs';
 
 const copy = {
   ru: { moreLoading: 'Загружаем остальные районы… Найденные места уже можно смотреть.', partial: 'Часть районов пока недоступна. Загруженные места показаны; повторите через минуту.', title: 'Места города', loading: 'Ищем границу города и интересные места…', empty: 'В границах города подходящих мест не найдено.',
+    surroundings: 'В контуре поселения мест не найдено. Показаны окрестности в пределах 2 км от центра.', settlement: 'Контур поселения', cityState: 'Город-государство',
     scope: 'Места по всему городу', boundary: 'Граница поиска', boundaryError: 'Не удалось подтвердить границу выбранного города. Поиск по всему городу недоступен.', sourceError: 'Источники мест временно недоступны. Попробуйте снова через минуту.', error: 'Не удалось загрузить места.', retry: 'Попробовать снова',
     pages: 'Страницы мест', previous: 'Назад', next: 'Дальше', pageRange: (first, last, total) => `Показаны ${first}–${last} из ${total}`,
     placeSelection: 'В списке', highlights: 'Главное', allPlaces: 'Все места',
@@ -36,6 +37,7 @@ const copy = {
     upcoming: 'Позже', ended: 'Завершилось', eventUnknown: 'Время события неизвестно',
     filtered: (places, events) => `Доступно мест — ${places}, событий — ${events}. Неизвестное расписание скрыто.` },
   en: { moreLoading: 'Loading the remaining areas… You can already explore the places found.', partial: 'Some areas are temporarily unavailable. Showing loaded places; try again in a minute.', title: 'City places', loading: 'Looking for the city boundary and places…', empty: 'No matching places within the city boundary.',
+    surroundings: 'No matching places in the settlement footprint. Showing surroundings within 2 km of the centre.', settlement: 'Settlement boundary', cityState: 'City-state boundary',
     scope: 'Places across the city', boundary: 'Search boundary', boundaryError: 'Could not confirm the selected city boundary. Citywide search is unavailable.', sourceError: 'Place sources are temporarily unavailable. Try again in a minute.', error: 'Could not load places.', retry: 'Try again',
     pages: 'Place pages', previous: 'Previous', next: 'Next', pageRange: (first, last, total) => `Showing ${first}–${last} of ${total}`,
     placeSelection: 'In the list', highlights: 'Highlights', allPlaces: 'All places',
@@ -223,7 +225,8 @@ export function placesPanel(city, language, signal, open, selection) {
   iconLabel(cancelPick, 'x', text.cancelPick);
   cancelPick.addEventListener('click', cancelStartSelection);
   pickerBox.append(pickHint, cancelPick);
-  details.append(summary, controls, slider, filterLabel, filterMessage, status, retry, mapControls, mapBox, pickerBox, legend, listView.filters, listView.empty, list, listView.pagination, credit);
+  const notice = document.createElement('div'); notice.className = 'discovery-status'; notice.append(status, retry);
+  details.append(summary, controls, slider, filterLabel, filterMessage, notice, mapControls, mapBox, pickerBox, legend, listView.filters, listView.empty, list, listView.pagination, credit);
   let refreshTimer, retryTimer, renderedAt, busy = false;
   signal.addEventListener('abort', () => { clearTimeout(refreshTimer); clearTimeout(retryTimer); }, { once: true });
   function unlockRetry(retryAt) {
@@ -242,12 +245,13 @@ export function placesPanel(city, language, signal, open, selection) {
     retry.hidden = true;
     if (!loadedPlaces.length) status.textContent = text.loading;
     try {
-      const { places, boundary, stale, checkedAt, incomplete, loading, retryAt } = await loadPlaces(city, { signal, storage });
+      const { places, boundary, surroundings, stale, checkedAt, revision = checkedAt, incomplete, loading, retryAt } = await loadPlaces(city, { signal, storage });
       if (signal.aborted) return;
       if (loading) refreshTimer = setTimeout(load, 2000);
-      if (loading && renderedAt === checkedAt) return;
-      renderedAt = checkedAt;
-      const view = loadedPlaces.length ? map?.view() : selection?.mapView;
+      if (loading && renderedAt === revision) return;
+      renderedAt = revision;
+      const hostArrived = loadedPlaces.length && loadedPlaces.every(place => place.territory) && places.some(place => !place.territory);
+      const view = hostArrived ? undefined : loadedPlaces.length ? map?.view() : selection?.mapView;
       map?.destroy();
       map = undefined;
       list.replaceChildren();
@@ -268,10 +272,10 @@ export function placesPanel(city, language, signal, open, selection) {
       if (alternative) map.previewPlace(alternative);
       if (draft) map.previewPlan(draft.legs, draft.stops);
       const date = new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(checkedAt);
-      status.textContent = [loading ? text.moreLoading : incomplete ? text.partial : places.length ? text.scope : text.empty, stale && text.saved + ' ' + date].filter(Boolean).join(' · ');
+      status.textContent = [loading ? text.moreLoading : incomplete ? text.partial : surroundings ? text.surroundings : places.length ? text.scope : text.empty, stale && text.saved + ' ' + date].filter(Boolean).join(' · ');
       const boundaryLink = document.createElement('a');
       boundaryLink.href = boundary.url;
-      boundaryLink.textContent = `${text.boundary}: ${boundary.name}`;
+      boundaryLink.textContent = `${boundary.kind === 'settlement' ? text.settlement : boundary.kind === 'city-state' ? text.cityState : text.boundary}: ${boundary.name}`;
       status.append(' · ', boundaryLink);
       for (const enclave of boundary.enclaves || []) {
         const link = document.createElement('a'); link.href = enclave.url;
@@ -296,7 +300,7 @@ export function placesPanel(city, language, signal, open, selection) {
   updateHours();
   return {
     element: details,
-    mapElements: { controls: mapControls, canvas: mapBox, picker: pickerBox, legend, credit },
+    mapElements: { notice, controls: mapControls, canvas: mapBox, picker: pickerBox, legend, credit },
     previewElements: { controls, slider, filter: filterLabel, message: filterMessage },
     selection() { return { date: day.value, time: clock.value, available: filter.checked, placePage: listView.getPage(), allPlaces: listView.showsAll(), mapEvents: eventToggle.checked, mapView: map?.view() || selection?.mapView }; },
     setTime(value) { clock.value = value; updateHours(); },

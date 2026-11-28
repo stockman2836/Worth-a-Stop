@@ -81,6 +81,7 @@ test('uses the other endpoint after an outage and respects a cancelled city sear
 test('uses the POST backup with the same query when both GET providers are unavailable', async () => {
   const calls = [];
   const places = await nearbyPlaces(city, { fetchResponse: async (url, options) => {
+    if (url.hostname === 'download.geofabrik.de') return new Response(null, { status: 503 });
     calls.push({ url, options });
     if (calls.length < 3) return new Response(null, { status: 503 });
     assert.equal(url.hostname, 'overpass.private.coffee');
@@ -162,4 +163,25 @@ test('a missing generated area is unavailable rather than an empty city shortlis
   const fetchResponse = async url => Response.json({ elements: url.searchParams.get('data').includes('is_in') ?
     [{ type: 'relation', id: 10, tags: { name: 'Town', boundary: 'administrative', admin_level: '8' } }] : [] });
   await assert.rejects(nearbyPlaces({ ...city, id: 1, name: 'Town' }, { scope: 'city', fetchResponse }), { code: 'PLACE_SOURCE_UNAVAILABLE' });
+});
+
+test('an empty settlement footprint uses explicitly labelled surroundings, while a failed city query cannot trigger that fallback', async () => {
+  const boundary = { relation: 10, kind: 'settlement', name: 'Village', url: 'https://www.openstreetmap.org/relation/10',
+    bounds: { minlat: -.001, minlon: -.001, maxlat: .001, maxlon: .001 } };
+  let nearbyCalls = 0;
+  const result = await nearbyPlaces({ latitude: 0, longitude: 0 }, { scope: 'city', resolveBoundary: async () => boundary,
+    fetchResponse: async url => {
+      if (url.hostname === 'download.geofabrik.de') return new Response(null, { status: 503 });
+      const query = url.searchParams.get('data');
+      if (query.includes('map_to_area')) return Response.json({ elements: [{ type: 'area', id: 3600000010 }] });
+      nearbyCalls++;
+      return Response.json({ elements: [{ type: 'node', id: 100, lat: .01, lon: 0, tags: { name: 'Garden', leisure: 'garden' } },
+        { type: 'node', id: 101, lat: .03, lon: 0, tags: { name: 'Too far', tourism: 'attraction' } }] });
+    } });
+  assert.equal(result.surroundings, true);
+  assert.deepEqual(result.places.map(place => place.name), ['Garden']);
+  assert.equal(result.boundary.url, boundary.url);
+  assert.equal(nearbyCalls, 1);
+  await assert.rejects(nearbyPlaces({ latitude: 0, longitude: 0 }, { scope: 'city', resolveBoundary: async () => boundary,
+    fetchResponse: async () => new Response(null, { status: 503 }) }), { code: 'PLACE_SOURCE_UNAVAILABLE' });
 });

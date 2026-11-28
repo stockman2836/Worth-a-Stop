@@ -19,10 +19,13 @@ function localBounds({ latitude, longitude }) {
     : `around:2000,${latitude},${longitude}`;
 }
 
-export async function placeElements(city, boundary, { signal, fetchResponse = fetch, queryCache, onElements } = {}) {
+export async function placeElements(city, boundary, { signal, fetchResponse = fetch, queryCache, onElements, queryBounds } = {}) {
   const tiled = Boolean(boundary?.segments);
-  const boxes = tiled ? boundary.parts.flatMap(box => tiledBounds([box],
-    city.latitude >= box.minlat && city.latitude <= box.maxlat && city.longitude >= box.minlon && city.longitude <= box.maxlon ? .1 : .2)) : [boundary?.bounds];
+  const local = localBounds(city).split(',').map(Number);
+  const nearbyBox = local.length === 4 && local.every(Number.isFinite)
+    ? { minlat: local[0], minlon: local[1], maxlat: local[2], maxlon: local[3] } : undefined;
+  const boxes = queryBounds ? [queryBounds] : tiled ? boundary.parts.flatMap(box => tiledBounds([box],
+    city.latitude >= box.minlat && city.latitude <= box.maxlat && city.longitude >= box.minlon && city.longitude <= box.maxlon ? .1 : .2)) : [boundary ? boundary.bounds : nearbyBox];
   if (tiled) {
     const distance = box => ((box.minlat + box.maxlat) / 2 - city.latitude) ** 2 +
       (((box.minlon + box.maxlon) / 2 - city.longitude) * Math.cos(city.latitude * Math.PI / 180)) ** 2;
@@ -32,7 +35,7 @@ export async function placeElements(city, boundary, { signal, fetchResponse = fe
   signal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
 
   async function load(box) {
-    const spatialBox = validExtent(box) ? `(${box.minlat},${box.minlon},${box.maxlat},${box.maxlon})` : '';
+    const spatialBox = validExtent(box) ? `(${box.minlat},${box.minlon},${box.maxlat},${box.maxlon})` : !boundary ? `(${localBounds(city)})` : '';
     const spatial = !tiled && spatialBox ? `nwr${spatialBox}[name]->.nearby;` : '';
     const filters = Object.entries(categories).flatMap(([tag, values]) => {
       const restricted = documentedCategories[tag] ?? [];

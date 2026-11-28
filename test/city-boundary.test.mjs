@@ -1,6 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cityBoundary } from '../src/city-boundary.mjs';
+import { readFile } from 'node:fs/promises';
+
+test('recorded settlement polygons resolve Yalta, Sevastopol, Nikita and the Vatican city-state', async () => {
+  const records = JSON.parse(await readFile(new URL('./fixtures/settlement-boundaries.json', import.meta.url)));
+  const cities = [
+    { id: 688533, name: 'Ялта', latitude: 44.50218, longitude: 34.16624, relation: 3005461 },
+    { id: 694423, name: 'Севастополь', latitude: 44.60795, longitude: 33.52134, relation: 3030976 },
+    { id: 711527, name: 'Никита', latitude: 44.51335, longitude: 34.23517, relation: 3598392 },
+    { id: 6691831, name: 'Ватикан', latitude: 41.90268, longitude: 12.45414, relation: 36989 },
+  ];
+  for (const city of cities) {
+    const polygon = records.find(record => record.id === city.relation);
+    const ambiguousAdmins = [1, 2].map(id => ({ type: 'relation', id,
+      tags: { name: city.name, boundary: 'administrative', admin_level: '4' } }));
+    const result = await cityBoundary(city, { fetchResponse: async url => {
+      if (url.hostname === 'download.geofabrik.de') return new Response(null, { status: 503 });
+      const query = url.searchParams.get('data');
+      assert(query.includes('area.all[place~'));
+      assert(query.includes('[admin_level=2][city=yes]'));
+      return Response.json({ elements: [polygon, ...ambiguousAdmins] });
+    } });
+    assert.equal(result.relation, city.relation);
+    assert.equal(result.kind, city.relation === 36989 ? 'city-state' : 'settlement');
+  }
+});
 
 const city = { id: 42, name: 'Town', latitude: 50, longitude: 14 };
 

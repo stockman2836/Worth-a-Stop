@@ -47,7 +47,7 @@ test('city and local searches use separate versioned cache entries and the corre
   assert.equal(calls[0].searchParams.get('scope'), 'city');
   assert.equal(calls[0].searchParams.get('id'), '42');
   assert.equal(calls[0].searchParams.get('name'), 'Town');
-  assert.equal(calls[0].searchParams.get('v'), '10');
+  assert.equal(calls[0].searchParams.get('v'), '11');
   assert.equal(calls[0].searchParams.has('radius'), false);
   await assert.rejects(loadPlaces(city, { storage: saved, scope: 'nearby', fetchResponse: unavailable }));
   await loadPlaces(city, { storage: saved, scope: 'nearby', fetchResponse });
@@ -97,6 +97,20 @@ test('a partial refresh cannot overwrite the last complete city catalogue', asyn
   assert.equal(result.stale, true);
   const offline = await loadPlaces(city, { storage: saved, fetchResponse: unavailable });
   assert.equal(offline.incomplete, undefined);
+});
+
+test('new partial places appear immediately alongside a complete saved catalogue without replacing its offline baseline', async () => {
+  const saved = storage();
+  const baseline = await loadPlaces(city, { storage: saved, fetchResponse: cityResponse });
+  const updated = { ...place, name: 'Updated park' };
+  const addition = { ...place, name: 'New museum', url: 'https://www.openstreetmap.org/node/2' };
+  const progress = await loadPlaces(city, { storage: saved, fetchResponse: async () =>
+    Response.json({ places: [updated, addition], boundary, checkedAt: 1234, incomplete: true, loading: true }) });
+  assert.deepEqual(progress.places, [updated, addition]);
+  assert.equal(progress.checkedAt, baseline.checkedAt);
+  assert.equal(progress.revision, 1234);
+  const offline = await loadPlaces(city, { storage: saved, fetchResponse: unavailable });
+  assert.deepEqual(offline.places, [place]);
 });
 
 test('unavailable states respect cooldown across workspace recreations and recover afterwards', async () => {

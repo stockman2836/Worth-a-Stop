@@ -47,7 +47,8 @@ test('place API separates city identities and local searches, validates scope an
   assert.equal(city.boundary.url, 'https://www.openstreetmap.org/relation/10');
   assert.ok(city.places[0].km > 6);
   const translated = await (await request({ scope: 'city', id: 42, name: 'Город' })).json();
-  assert.deepEqual(translated, city);
+  assert.deepEqual(translated.places, city.places);
+  assert.deepEqual(translated.boundary, city.boundary);
   const other = await (await request({ scope: 'city', id: 43, name: 'Other town' })).json();
   assert.equal(other.boundary.url, 'https://www.openstreetmap.org/relation/11');
   assert.equal(other.places[0].name, 'Other landmark');

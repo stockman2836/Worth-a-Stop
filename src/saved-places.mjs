@@ -41,7 +41,7 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
   try {
     const blocked = cooldown.get(key);
     if (blocked?.retryAt > Date.now()) throw blocked;
-    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '10' });
+    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '11' });
     if (scope === 'city') { query.set('id', city.id); query.set('name', city.name); }
     const response = await fetchResponse('/api/places?' + query, { signal });
     const payload = await response.json().catch(() => undefined);
@@ -59,8 +59,17 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
     if (!validResult(data)) throw Error('Invalid places response');
     signal?.throwIfAborted();
     cooldown.delete(key);
-    if (data.incomplete && saved && !saved.incomplete) return { ...saved, stale: true, incomplete: true, loading: Boolean(data.loading), retryAt: data.retryAt };
+    if (data.incomplete && saved && !saved.incomplete) {
+      const places = new Map(saved.places.map(place => [place.url, place]));
+      for (const place of data.places) places.set(place.url, place);
+      const enclaves = new Map((saved.boundary?.enclaves ?? []).map(territory => [territory.url, territory]));
+      for (const territory of data.boundary?.enclaves ?? []) enclaves.set(territory.url, territory);
+      return { ...saved, places: [...places.values()],
+        ...(scope === 'city' && { boundary: { ...data.boundary, ...(enclaves.size && { enclaves: [...enclaves.values()] }) } }),
+        revision: data.checkedAt ?? Date.now(), stale: true, incomplete: true, loading: Boolean(data.loading), retryAt: data.retryAt };
+    }
     const result = { places: data.places, ...(scope === 'city' && { boundary: data.boundary }),
+      ...(data.surroundings && { surroundings: true }),
       ...(data.incomplete && { incomplete: true }), ...(Number.isFinite(data.retryAt) && { retryAt: data.retryAt }),
       checkedAt: Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now() ? data.checkedAt : Date.now() };
     try { storage?.setItem(key, JSON.stringify(result)); } catch { /* Live results remain usable. */ }

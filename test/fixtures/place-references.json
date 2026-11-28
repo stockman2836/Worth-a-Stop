@@ -1,0 +1,432 @@
+{
+  "source": "https://www.wikidata.org/w/api.php?action=wbgetentities&ids=Q211295%7CQ1126723%7CQ2031901&props=sitelinks&format=json",
+  "checkedOn": "2026-11-28",
+  "entities": {
+    "Q211295": {
+      "type": "item",
+      "id": "Q211295",
+      "sitelinks": {
+        "arzwiki": {
+          "site": "arzwiki",
+          "title": "منتدى تراجان"
+        },
+        "bewiki": {
+          "site": "bewiki",
+          "title": "Форум Траяна"
+        },
+        "bgwiki": {
+          "site": "bgwiki",
+          "title": "Форум на Траян"
+        },
+        "cawiki": {
+          "site": "cawiki",
+          "title": "Fòrum de Trajà"
+        },
+        "commonswiki": {
+          "site": "commonswiki",
+          "title": "Trajan's Forum"
+        },
+        "cswiki": {
+          "site": "cswiki",
+          "title": "Trajánovo fórum"
+        },
+        "dawiki": {
+          "site": "dawiki",
+          "title": "Trajans forum"
+        },
+        "dewiki": {
+          "site": "dewiki",
+          "title": "Trajansforum"
+        },
+        "elwiki": {
+          "site": "elwiki",
+          "title": "Αγορά του Τραϊανού"
+        },
+        "enwiki": {
+          "site": "enwiki",
+          "title": "Trajan's Forum"
+        },
+        "eowiki": {
+          "site": "eowiki",
+          "title": "Forumo de Trajano"
+        },
+        "eswiki": {
+          "site": "eswiki",
+          "title": "Foro de Trajano"
+        },
+        "euwiki": {
+          "site": "euwiki",
+          "title": "Trajanoren foroa"
+        },
+        "fawiki": {
+          "site": "fawiki",
+          "title": "فروم تراژان"
+        },
+        "fiwiki": {
+          "site": "fiwiki",
+          "title": "Trajanuksen forum"
+        },
+        "frwiki": {
+          "site": "frwiki",
+          "title": "Forum de Trajan"
+        },
+        "glwiki": {
+          "site": "glwiki",
+          "title": "Foro de Traxano"
+        },
+        "hewiki": {
+          "site": "hewiki",
+          "title": "פורום טראיאנוס"
+        },
+        "hrwiki": {
+          "site": "hrwiki",
+          "title": "Trajanov forum"
+        },
+        "htwiki": {
+          "site": "htwiki",
+          "title": "Fowòm Trajan an"
+        },
+        "huwiki": {
+          "site": "huwiki",
+          "title": "Traianus fóruma"
+        },
+        "hywiki": {
+          "site": "hywiki",
+          "title": "Տրայանոսի հրապարակ"
+        },
+        "itwiki": {
+          "site": "itwiki",
+          "title": "Foro di Traiano"
+        },
+        "itwikiquote": {
+          "site": "itwikiquote",
+          "title": "Foro di Traiano"
+        },
+        "jawiki": {
+          "site": "jawiki",
+          "title": "トラヤヌスのフォルム"
+        },
+        "kawiki": {
+          "site": "kawiki",
+          "title": "ტრაიანეს ფორუმი"
+        },
+        "kowiki": {
+          "site": "kowiki",
+          "title": "트라야누스 포룸"
+        },
+        "lawiki": {
+          "site": "lawiki",
+          "title": "Forum Traiani (Roma)"
+        },
+        "mkwiki": {
+          "site": "mkwiki",
+          "title": "Трајанов форум"
+        },
+        "nlwiki": {
+          "site": "nlwiki",
+          "title": "Forum van Trajanus"
+        },
+        "nnwiki": {
+          "site": "nnwiki",
+          "title": "Trajans forum"
+        },
+        "nowiki": {
+          "site": "nowiki",
+          "title": "Trajans forum"
+        },
+        "plwiki": {
+          "site": "plwiki",
+          "title": "Forum Trajana"
+        },
+        "plwikiquote": {
+          "site": "plwikiquote",
+          "title": "Forum Trajana"
+        },
+        "ptwiki": {
+          "site": "ptwiki",
+          "title": "Fórum de Trajano"
+        },
+        "rowiki": {
+          "site": "rowiki",
+          "title": "Forul lui Traian"
+        },
+        "ruwiki": {
+          "site": "ruwiki",
+          "title": "Форум Траяна"
+        },
+        "shwiki": {
+          "site": "shwiki",
+          "title": "Trajanov forum"
+        },
+        "skwiki": {
+          "site": "skwiki",
+          "title": "Trajánovo fórum"
+        },
+        "slwiki": {
+          "site": "slwiki",
+          "title": "Trajanov forum"
+        },
+        "srwiki": {
+          "site": "srwiki",
+          "title": "Трајанов форум"
+        },
+        "svwiki": {
+          "site": "svwiki",
+          "title": "Trajanus forum"
+        },
+        "tlwiki": {
+          "site": "tlwiki",
+          "title": "Foro ni Trajano"
+        },
+        "trwiki": {
+          "site": "trwiki",
+          "title": "Trajan Forumu"
+        },
+        "ukwiki": {
+          "site": "ukwiki",
+          "title": "Форум Траяна"
+        },
+        "wuuwiki": {
+          "site": "wuuwiki",
+          "title": "图拉真广场"
+        },
+        "zhwiki": {
+          "site": "zhwiki",
+          "title": "图拉真广场"
+        }
+      }
+    },
+    "Q1126723": {
+      "type": "item",
+      "id": "Q1126723",
+      "sitelinks": {
+        "arwiki": {
+          "site": "arwiki",
+          "title": "فيلا فارنيسينا"
+        },
+        "bewiki": {
+          "site": "bewiki",
+          "title": "Віла Фарнезіна"
+        },
+        "bgwiki": {
+          "site": "bgwiki",
+          "title": "Вила Фарнезина"
+        },
+        "cawiki": {
+          "site": "cawiki",
+          "title": "Villa Farnesina"
+        },
+        "commonswiki": {
+          "site": "commonswiki",
+          "title": "Villa Farnesina alla Lungara (Roma)"
+        },
+        "cswiki": {
+          "site": "cswiki",
+          "title": "Villa Farnesina"
+        },
+        "dewiki": {
+          "site": "dewiki",
+          "title": "Villa Farnesina"
+        },
+        "elwiki": {
+          "site": "elwiki",
+          "title": "Βίλα Φαρνεζίνα"
+        },
+        "enwiki": {
+          "site": "enwiki",
+          "title": "Villa Farnesina"
+        },
+        "eowiki": {
+          "site": "eowiki",
+          "title": "Villa Farnesina"
+        },
+        "eswiki": {
+          "site": "eswiki",
+          "title": "Villa Farnesina"
+        },
+        "euwiki": {
+          "site": "euwiki",
+          "title": "Villa Farnesina"
+        },
+        "frwiki": {
+          "site": "frwiki",
+          "title": "Villa Farnesina"
+        },
+        "hewiki": {
+          "site": "hewiki",
+          "title": "וילה פארנזינה"
+        },
+        "hrwiki": {
+          "site": "hrwiki",
+          "title": "Villa Farnesina"
+        },
+        "huwiki": {
+          "site": "huwiki",
+          "title": "Villa Farnesina"
+        },
+        "hywiki": {
+          "site": "hywiki",
+          "title": "Վիլլա Ֆառնեզինա"
+        },
+        "itwiki": {
+          "site": "itwiki",
+          "title": "Villa Farnesina"
+        },
+        "jawiki": {
+          "site": "jawiki",
+          "title": "ヴィラ・ファルネジーナ"
+        },
+        "kawiki": {
+          "site": "kawiki",
+          "title": "ფარნეზინას ვილა"
+        },
+        "kowiki": {
+          "site": "kowiki",
+          "title": "빌라 파르네시나"
+        },
+        "lawiki": {
+          "site": "lawiki",
+          "title": "Viridarium Augustini Chigii"
+        },
+        "nlwiki": {
+          "site": "nlwiki",
+          "title": "Villa Farnesina"
+        },
+        "nowiki": {
+          "site": "nowiki",
+          "title": "Villa Farnesina"
+        },
+        "plwiki": {
+          "site": "plwiki",
+          "title": "Villa Farnesina"
+        },
+        "ptwiki": {
+          "site": "ptwiki",
+          "title": "Villa Farnesina"
+        },
+        "ruwiki": {
+          "site": "ruwiki",
+          "title": "Вилла Фарнезина"
+        },
+        "shwiki": {
+          "site": "shwiki",
+          "title": "Villa Farnesina"
+        },
+        "skwiki": {
+          "site": "skwiki",
+          "title": "Villa Farnesina"
+        },
+        "slwiki": {
+          "site": "slwiki",
+          "title": "Villa Farnesina"
+        },
+        "srwiki": {
+          "site": "srwiki",
+          "title": "Вила Фарнезина"
+        },
+        "svwiki": {
+          "site": "svwiki",
+          "title": "Villa Farnesina"
+        },
+        "tlwiki": {
+          "site": "tlwiki",
+          "title": "Villa Farnesina"
+        },
+        "ukwiki": {
+          "site": "ukwiki",
+          "title": "Вілла Фарнезіна"
+        },
+        "zhwiki": {
+          "site": "zhwiki",
+          "title": "法爾內西納別墅"
+        }
+      }
+    },
+    "Q2031901": {
+      "type": "item",
+      "id": "Q2031901",
+      "sitelinks": {
+        "arzwiki": {
+          "site": "arzwiki",
+          "title": "كنيسه سانتا ماريا فى فاليسيلا"
+        },
+        "cawiki": {
+          "site": "cawiki",
+          "title": "Santa Maria in Vallicella"
+        },
+        "cswiki": {
+          "site": "cswiki",
+          "title": "Santa Maria in Vallicella"
+        },
+        "dewiki": {
+          "site": "dewiki",
+          "title": "Santa Maria in Vallicella"
+        },
+        "enwiki": {
+          "site": "enwiki",
+          "title": "Santa Maria in Vallicella"
+        },
+        "eswiki": {
+          "site": "eswiki",
+          "title": "Iglesia de Santa María de Vallicella"
+        },
+        "euwiki": {
+          "site": "euwiki",
+          "title": "Santa Maria in Vallicella"
+        },
+        "fawiki": {
+          "site": "fawiki",
+          "title": "سانتا ماریا در والیچلا"
+        },
+        "frwiki": {
+          "site": "frwiki",
+          "title": "Chiesa Nuova"
+        },
+        "idwiki": {
+          "site": "idwiki",
+          "title": "Santa Maria in Vallicella"
+        },
+        "itwiki": {
+          "site": "itwiki",
+          "title": "Chiesa Nuova (Roma)"
+        },
+        "nlwiki": {
+          "site": "nlwiki",
+          "title": "Chiesa Nuova (Rome)"
+        },
+        "plwiki": {
+          "site": "plwiki",
+          "title": "Kościół Matki Bożej „in Vallicella”"
+        },
+        "ptwiki": {
+          "site": "ptwiki",
+          "title": "Igreja de Santa Maria em Vallicella"
+        },
+        "ruwiki": {
+          "site": "ruwiki",
+          "title": "Санта-Мария-ин-Валичелла"
+        },
+        "slwiki": {
+          "site": "slwiki",
+          "title": "Chiesa Nuova"
+        },
+        "svwiki": {
+          "site": "svwiki",
+          "title": "Santa Maria in Vallicella"
+        },
+        "tlwiki": {
+          "site": "tlwiki",
+          "title": "Santa Maria in Vallicella"
+        },
+        "ukwiki": {
+          "site": "ukwiki",
+          "title": "Санта-Марія-ін-Валлічелла"
+        },
+        "zhwiki": {
+          "site": "zhwiki",
+          "title": "新堂 (罗马)"
+        }
+      }
+    }
+  }
+}

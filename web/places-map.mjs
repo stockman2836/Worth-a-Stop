@@ -2,6 +2,7 @@ import * as L from './leaflet.mjs';
 import { markerFace, placeGroup, placeSymbols } from './map-symbols.mjs';
 import { discoveryIndex } from './discovery-index.mjs';
 import { detailZoom, initialHighlights } from './discovery-visibility.mjs';
+import { referenceLink } from './place-reference-view.mjs';
 
 export function placesMap(container, city, places, labels, onSelect, view) {
   const motion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -46,6 +47,8 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     state.textContent = stateFor(item)?.label || '';
     state.dataset.state = stateFor(item)?.state || 'unknown';
     popup.append(title, state, hours);
+    const reference = referenceLink(item, labels);
+    if (reference) popup.append(reference);
     if (item.territory && labels.territory) {
       const paragraph = document.createElement('p'), territory = document.createElement('a');
       territory.href = item.territory.url; territory.textContent = labels.territory(item.territory);

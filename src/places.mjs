@@ -158,7 +158,7 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
       places.push({ latitude: point.lat, longitude: point.lon, name, names: { ru: tags['name:ru'], en: tags['name:en'] }, category: tags[key], km, hours: tags.opening_hours,
         rank: importance(tags, signals.languages),
         signals,
-        identity: tags.wikidata,
+        identity: tags.wikidata, ...(/^Q[1-9]\d*$/.test(tags.wikidata) && { wikidata: tags.wikidata }),
         ...(validTerritory(territory) && { territory }),
         url: `https://www.openstreetmap.org/${type}/${id}` });
     }

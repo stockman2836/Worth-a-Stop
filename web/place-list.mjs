@@ -1,6 +1,7 @@
 import { iconLabel } from './icons.mjs';
 import { placeGroup, placeSymbols } from './map-symbols.mjs';
 import { territoryLabel } from './territory.mjs';
+import { referenceLink } from './place-reference-view.mjs';
 
 export function placeList(language, text, getItinerary, onShow, initialPage, allPlaces = false) {
   const element = document.createElement('ul'); element.className = 'places';
@@ -39,7 +40,10 @@ export function placeList(language, text, getItinerary, onShow, initialPage, all
       if (place.prominence === 'highlight') {
         category.title = (place.prominenceReasons || []).map(reason => text.prominenceReasons[reason]).filter(Boolean).join(' · ');
       }
-      item.append(category, show, badge, info, link, getItinerary().button(place, 'place')); element.append(item);
+      item.append(category, show, badge, info, link); element.append(item);
+      const reference = referenceLink(place, text);
+      if (reference) item.append(reference);
+      item.append(getItinerary().button(place, 'place'));
       if (place.territory) {
         const territory = document.createElement('a'); territory.className = 'place-territory';
         territory.href = place.territory.url; territory.textContent = territoryLabel(place.territory, language);

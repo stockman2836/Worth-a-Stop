@@ -10,13 +10,14 @@ import { territoryLabel } from './territory.mjs';
 
 const copy = {
   ru: { moreLoading: 'Загружаем остальные районы… Найденные места уже можно смотреть.', partial: 'Часть районов пока недоступна. Загруженные места показаны; повторите через минуту.', title: 'Места города', loading: 'Ищем границу города и интересные места…', empty: 'В границах города подходящих мест не найдено.',
+    referenceLanguages: 'Языков Википедии', referencesLoading: 'Проверяем справочные данные… Места уже можно смотреть.', referencesPartial: 'Справочные данные проверены частично. Базовая подборка сохранена.', referencesUnavailable: 'Дополнительные справочные данные сейчас недоступны. Показана подборка по данным карты.',
     surroundings: 'В контуре поселения мест не найдено. Показаны окрестности в пределах 2 км от центра.', settlement: 'Контур поселения', cityState: 'Город-государство',
     scope: 'Места по всему городу', boundary: 'Граница поиска', boundaryError: 'Не удалось подтвердить границу выбранного города. Поиск по всему городу недоступен.', sourceError: 'Источники мест временно недоступны. Попробуйте снова через минуту.', error: 'Не удалось загрузить места.', retry: 'Попробовать снова',
     pages: 'Страницы мест', previous: 'Назад', next: 'Дальше', pageRange: (first, last, total) => `Показаны ${first}–${last} из ${total}`,
     placeSelection: 'В списке', highlights: 'Главное', allPlaces: 'Все места',
     noHighlights: 'В источнике недостаточно признаков значимости для главной подборки. Остальные места доступны во вкладке «Все места».',
     noOpenHighlights: 'Среди главных мест нет подтверждённо открытых сейчас. Отключите фильтр доступности или откройте все места.',
-    prominenceReasons: { documented: 'Есть справочные ссылки', multilingual: 'Название на нескольких языках', heritage: 'Охранный статус', international: 'Отмечено международное значение' },
+    prominenceReasons: { documented: 'Есть справочные ссылки', multilingual: 'Название на нескольких языках', heritage: 'Охранный статус', international: 'Отмечено международное значение', encyclopedic: 'Статьи как минимум в 30 языковых разделах Википедии — дополнительный признак значимости' },
     mapGuide: 'Главные места показаны сразу. Дополнительные появляются при приближении.', mapEvents: 'События на карте',
     clusterCount: (places, events) => `Места: ${places}, события: ${events}. Приблизьте карту или выберите объект в группе.`,
     clusterKinds: (places, events) => [places && `М:${places}`, events && `С:${events}`].filter(Boolean).join(' · '),
@@ -37,13 +38,14 @@ const copy = {
     upcoming: 'Позже', ended: 'Завершилось', eventUnknown: 'Время события неизвестно',
     filtered: (places, events) => `Доступно мест — ${places}, событий — ${events}. Неизвестное расписание скрыто.` },
   en: { moreLoading: 'Loading the remaining areas… You can already explore the places found.', partial: 'Some areas are temporarily unavailable. Showing loaded places; try again in a minute.', title: 'City places', loading: 'Looking for the city boundary and places…', empty: 'No matching places within the city boundary.',
+    referenceLanguages: 'Wikipedia languages', referencesLoading: 'Checking reference data… You can already explore the places.', referencesPartial: 'Reference data was checked partially. The base selection is retained.', referencesUnavailable: 'Additional reference data is temporarily unavailable. Showing the selection based on map data.',
     surroundings: 'No matching places in the settlement footprint. Showing surroundings within 2 km of the centre.', settlement: 'Settlement boundary', cityState: 'City-state boundary',
     scope: 'Places across the city', boundary: 'Search boundary', boundaryError: 'Could not confirm the selected city boundary. Citywide search is unavailable.', sourceError: 'Place sources are temporarily unavailable. Try again in a minute.', error: 'Could not load places.', retry: 'Try again',
     pages: 'Place pages', previous: 'Previous', next: 'Next', pageRange: (first, last, total) => `Showing ${first}–${last} of ${total}`,
     placeSelection: 'In the list', highlights: 'Highlights', allPlaces: 'All places',
     noHighlights: 'The source lacks enough prominence annotations for a highlights selection. Other places remain available under All places.',
     noOpenHighlights: 'No highlights are verified open now. Turn off the availability filter or explore all places.',
-    prominenceReasons: { documented: 'Reference links available', multilingual: 'Named in several languages', heritage: 'Heritage designation', international: 'Marked as internationally significant' },
+    prominenceReasons: { documented: 'Reference links available', multilingual: 'Named in several languages', heritage: 'Heritage designation', international: 'Marked as internationally significant', encyclopedic: 'Articles in at least 30 Wikipedia language editions provide additional prominence evidence' },
     mapGuide: 'Highlights are shown immediately. More places appear as you zoom in.', mapEvents: 'Events on the map',
     clusterCount: (places, events) => `Places: ${places}, events: ${events}. Zoom in or choose an item in the group.`,
     clusterKinds: (places, events) => [places && `P:${places}`, events && `E:${events}`].filter(Boolean).join(' · '),
@@ -226,7 +228,8 @@ export function placesPanel(city, language, signal, open, selection) {
   iconLabel(cancelPick, 'x', text.cancelPick);
   cancelPick.addEventListener('click', cancelStartSelection);
   pickerBox.append(pickHint, cancelPick);
-  const notice = document.createElement('div'); notice.className = 'discovery-status'; notice.append(status, retry);
+  const referenceStatus = document.createElement('p'); referenceStatus.hidden = true;
+  const notice = document.createElement('div'); notice.className = 'discovery-status'; notice.append(status, referenceStatus, retry);
   details.append(summary, controls, slider, filterLabel, filterMessage, notice, mapControls, mapBox, pickerBox, legend, listView.filters, listView.empty, list, listView.pagination, credit);
   let refreshTimer, retryTimer, renderedAt, busy = false;
   signal.addEventListener('abort', () => { clearTimeout(refreshTimer); clearTimeout(retryTimer); }, { once: true });
@@ -246,7 +249,7 @@ export function placesPanel(city, language, signal, open, selection) {
     retry.hidden = true;
     if (!loadedPlaces.length) status.textContent = text.loading;
     try {
-      const { places, boundary, surroundings, stale, checkedAt, revision = checkedAt, incomplete, loading, retryAt } = await loadPlaces(city, { signal, storage });
+      const { places, boundary, surroundings, referencesStatus, stale, checkedAt, revision = checkedAt, incomplete, loading, retryAt } = await loadPlaces(city, { signal, storage });
       if (signal.aborted) return;
       if (loading) refreshTimer = setTimeout(load, 2000);
       if (loading && renderedAt === revision) return;
@@ -271,7 +274,9 @@ export function placesPanel(city, language, signal, open, selection) {
       if (alternative) map.previewPlace(alternative);
       if (draft) map.previewPlan(draft.legs, draft.stops);
       const date = new Intl.DateTimeFormat(language, { dateStyle: 'short', timeStyle: 'short' }).format(checkedAt);
-      status.textContent = [loading ? text.moreLoading : incomplete ? text.partial : surroundings ? text.surroundings : places.length ? text.scope : text.empty, stale && text.saved + ' ' + date].filter(Boolean).join(' · ');
+      status.textContent = [loading ? referencesStatus === 'loading' ? text.referencesLoading : text.moreLoading : incomplete ? text.partial : surroundings ? text.surroundings : places.length ? text.scope : text.empty, stale && text.saved + ' ' + date].filter(Boolean).join(' · ');
+      referenceStatus.textContent = referencesStatus === 'partial' ? text.referencesPartial : referencesStatus === 'unavailable' ? text.referencesUnavailable : '';
+      referenceStatus.hidden = !referenceStatus.textContent;
       const boundaryLink = document.createElement('a');
       boundaryLink.href = boundary.url;
       boundaryLink.textContent = `${boundary.kind === 'settlement' ? text.settlement : boundary.kind === 'city-state' ? text.cityState : text.boundary}: ${boundary.name}`;

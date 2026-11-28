@@ -1,8 +1,9 @@
 import { cityBoundary } from './city-boundary.mjs';
 import { nearbyPlaces } from './places.mjs';
+import { enrichPlaceReferences } from './place-references.mjs';
 
 export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
-  discoverBoundary = cityBoundary, discoverPlaces = nearbyPlaces, diskCache, idleTimeout = 6000, failureTtl = 60000 } = {}) {
+  discoverBoundary = cityBoundary, discoverPlaces = nearbyPlaces, enrichPlaces = enrichPlaceReferences, diskCache, idleTimeout = 6000, failureTtl = 60000 } = {}) {
   const boundaries = new Map(), results = new Map();
   function subscribe(entry, signal) {
     signal?.throwIfAborted();
@@ -52,9 +53,9 @@ export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
       entry.signal?.throwIfAborted();
       let saved = await diskCache?.get(key).catch(() => undefined);
       if (saved?.expires > now()) { entry.pending = false; entry.expires = saved.expires; return saved.value; }
-      if (!saved && job && key.startsWith('places-v11/city/')) {
-        for (const version of ['v10', 'v9']) {
-          saved = await diskCache?.get(key.replace('places-v11/', `places-${version}/`)).catch(() => undefined);
+      if (!saved && job && key.startsWith('places-v12/city/')) {
+        for (const version of ['v11', 'v10', 'v9']) {
+          saved = await diskCache?.get(key.replace('places-v12/', `places-${version}/`)).catch(() => undefined);
           if (saved) break;
         }
       }
@@ -100,13 +101,18 @@ export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
   return async (city, { scope = 'nearby', signal } = {}) => {
     signal?.throwIfAborted();
     const identity = [city.id, city.latitude, city.longitude].join('/');
-    const key = 'places-v11/' + (scope === 'city' ? 'city/' + identity : ['nearby', city.latitude, city.longitude].join('/'));
-    return cached(results, key, 3600000, (onProgress, jobSignal) => discoverPlaces(city, {
-      scope, fetchResponse, queryCache: diskCache, signal: jobSignal,
-      onProgress: scope === 'city' ? onProgress : undefined,
-      resolveBoundary: () => cached(boundaries, 'boundary-v4/' + identity, 86400000,
-        () => discoverBoundary(city, { fetchResponse, queryCache: diskCache,
-          signal: AbortSignal.any([jobSignal, AbortSignal.timeout(35000)]) }), false, jobSignal),
-    }), true, signal);
+    const key = 'places-v12/' + (scope === 'city' ? 'city/' + identity : ['nearby', city.latitude, city.longitude].join('/'));
+    return cached(results, key, 3600000, async (onProgress, jobSignal) => {
+      const result = await discoverPlaces(city, {
+        scope, fetchResponse, queryCache: diskCache, signal: jobSignal,
+        onProgress: scope === 'city' ? onProgress : undefined,
+        resolveBoundary: () => cached(boundaries, 'boundary-v4/' + identity, 86400000,
+          () => discoverBoundary(city, { fetchResponse, queryCache: diskCache,
+            signal: AbortSignal.any([jobSignal, AbortSignal.timeout(35000)]) }), false, jobSignal),
+      });
+      if (scope !== 'city' || !Array.isArray(result?.places) || !result.places.some(place => place.wikidata)) return result;
+      onProgress({ ...result, referencesStatus: 'loading' });
+      return enrichPlaces(result, { signal: jobSignal, fetchResponse, queryCache: diskCache, now });
+    }, true, signal);
   };
 }

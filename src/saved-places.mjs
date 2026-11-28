@@ -1,4 +1,5 @@
 import { validTerritory } from './territory.mjs';
+import { validPlaceReference } from './place-reference.mjs';
 
 function validPlaces(places, limit) {
   return Array.isArray(places) && places.length <= limit && places.every(place =>
@@ -7,7 +8,8 @@ function validPlaces(places, limit) {
     Number.isFinite(place.longitude) && Math.abs(place.longitude) <= 180 &&
     Number.isFinite(place.km) && place.km >= 0 &&
     /^https:\/\/www\.openstreetmap\.org\/(node|way|relation)\/\d+$/.test(place.url) &&
-    (place.territory === undefined || validTerritory(place.territory)));
+    (place.territory === undefined || validTerritory(place.territory)) &&
+    (place.reference === undefined || validPlaceReference(place.reference, place.wikidata)));
 }
 
 function validBoundary(boundary) {
@@ -41,7 +43,7 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
   try {
     const blocked = cooldown.get(key);
     if (blocked?.retryAt > Date.now()) throw blocked;
-    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '11' });
+    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '12' });
     if (scope === 'city') { query.set('id', city.id); query.set('name', city.name); }
     const response = await fetchResponse('/api/places?' + query, { signal });
     const payload = await response.json().catch(() => undefined);
@@ -66,10 +68,11 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
       for (const territory of data.boundary?.enclaves ?? []) enclaves.set(territory.url, territory);
       return { ...saved, places: [...places.values()],
         ...(scope === 'city' && { boundary: { ...data.boundary, ...(enclaves.size && { enclaves: [...enclaves.values()] }) } }),
-        revision: data.checkedAt ?? Date.now(), stale: true, incomplete: true, loading: Boolean(data.loading), retryAt: data.retryAt };
+        referencesStatus: data.referencesStatus, revision: data.checkedAt ?? Date.now(), stale: true, incomplete: true, loading: Boolean(data.loading), retryAt: data.retryAt };
     }
     const result = { places: data.places, ...(scope === 'city' && { boundary: data.boundary }),
       ...(data.surroundings && { surroundings: true }),
+      ...(['loading', 'checked', 'partial', 'unavailable'].includes(data.referencesStatus) && { referencesStatus: data.referencesStatus }),
       ...(data.incomplete && { incomplete: true }), ...(Number.isFinite(data.retryAt) && { retryAt: data.retryAt }),
       checkedAt: Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now() ? data.checkedAt : Date.now() };
     try { storage?.setItem(key, JSON.stringify(result)); } catch { /* Live results remain usable. */ }

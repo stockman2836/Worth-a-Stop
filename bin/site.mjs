@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { createWalkingRouter } from '../src/walking-router.mjs';
 
 const assets = new Map([
+  ['/place-reference.mjs', ['../src/place-reference.mjs', 'text/javascript']],
+  ['/place-reference-view.mjs', ['../web/place-reference-view.mjs', 'text/javascript']],
   ['/territory.mjs', ['../src/territory.mjs', 'text/javascript']],
   ['/', ['../web/index.html', 'text/html']],
   ['/site.css', ['../web/site.css', 'text/css']],

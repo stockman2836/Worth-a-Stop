@@ -518,3 +518,4 @@ footer { border-top: 1px solid var(--line); font-size: .75rem; opacity: .9; }
 .discovery-status { padding: .75rem 1rem; border-radius: .75rem; background: var(--surface); }
 .discovery-status p { margin: 0; font-size: .875rem; line-height: 1.6; }
 .discovery-status button { margin-top: .5rem; }
+.place-reference { display: block; font-size: .8rem; color: var(--secondary); }

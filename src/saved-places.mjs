@@ -43,7 +43,7 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
   try {
     const blocked = cooldown.get(key);
     if (blocked?.retryAt > Date.now()) throw blocked;
-    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '12' });
+    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '13' });
     if (scope === 'city') { query.set('id', city.id); query.set('name', city.name); }
     const response = await fetchResponse('/api/places?' + query, { signal });
     const payload = await response.json().catch(() => undefined);

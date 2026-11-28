@@ -49,7 +49,10 @@ export async function placeElements(city, boundary, { signal, fetchResponse = fe
     });
     const membership = !tiled && boundary && spatialBox ? `->.candidates;nwr.candidates(area.city)${spatialBox}` : '';
     const area = !tiled && boundary ? `rel(${boundary.relation});map_to_area->.city;.city out tags;` : '';
-    const query = `${area}${spatial}(${filters.join('')})${membership};out ${tiled ? 'body geom' : 'tags center'};`;
+    // Keep compact output for most objects. Parks and gardens need their real
+    // outline: a bounding-box centre can land outside a concave polygon.
+    const output = tiled ? ';out body geom;' : '->.places;.places out tags center;(way.places[leisure~"^(park|garden)$"];rel.places[leisure~"^(park|garden)$"];);out body geom;';
+    const query = `${area}${spatial}(${filters.join('')})${membership}${output}`;
     const key = 'tile-v3/' + boundary?.relation + '/' + query;
     const saved = tiled ? await queryCache?.get(key).catch(() => undefined) : undefined;
     if (saved?.expires > Date.now() && Array.isArray(saved.value)) return saved.value;
@@ -69,6 +72,10 @@ export async function placeElements(city, boundary, { signal, fetchResponse = fe
       }
       throw error;
     }
+    const keyOf = element => `${element.type}/${element.id}`;
+    const shapes = new Map(result.filter(element => element.geometry || element.members?.some(member => member.geometry))
+      .map(element => [keyOf(element), element]));
+    result = result.filter(element => !shapes.has(keyOf(element)) || shapes.get(keyOf(element)) === element);
     if (tiled) await queryCache?.set(key, { expires: Date.now() + 3600000, value: result }).catch(() => {});
     return result;
   }

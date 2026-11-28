@@ -5,6 +5,7 @@ import { categories, documentedCategories, placeElements } from './place-element
 import { validTerritory } from './territory.mjs';
 import { cityEnclaves } from './city-enclaves.mjs';
 import { initialCityBounds } from './place-preview.mjs';
+import { placePoint } from './place-point.mjs';
 
 function importance(tags, translations) {
   const landmark = categories.building.includes(tags.building) || tags.tourism === 'attraction' || categories.historic.includes(tags.historic);
@@ -17,21 +18,6 @@ function importance(tags, translations) {
 
 function validPoint(lat, lon) {
   return Number.isFinite(lat) && Math.abs(lat) <= 90 && Number.isFinite(lon) && Math.abs(lon) <= 180;
-}
-
-function elementPoint({ center, lat, lon, geometry, members }) {
-  if (validPoint(center?.lat, center?.lon)) return center;
-  if (validPoint(lat, lon)) return { lat, lon };
-  // Overpass geometry output overrides its centre output. Derive the same
-  // bounding-box centre from way coordinates and relation member geometry.
-  const points = geometry ?? members?.flatMap(member => member.geometry ?? [member]) ?? [];
-  let south = Infinity, west = Infinity, north = -Infinity, east = -Infinity;
-  for (const point of points) {
-    if (!validPoint(point?.lat, point?.lon)) continue;
-    south = Math.min(south, point.lat); north = Math.max(north, point.lat);
-    west = Math.min(west, point.lon); east = Math.max(east, point.lon);
-  }
-  return { lat: (south + north) / 2, lon: (west + east) / 2 };
 }
 
 function distance(lat, lon, otherLat, otherLon) {
@@ -141,8 +127,8 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
   function present(elements, incomplete) {
     const places = [];
     for (const { type, id, lat, lon, center, geometry, members, territory, tags = {} } of elements) {
-      const point = elementPoint({ center, lat, lon, geometry, members });
-      if (!validPoint(point.lat, point.lon) || !['node', 'way', 'relation'].includes(type) || !Number.isSafeInteger(id)) continue;
+      const point = placePoint({ type, center, lat, lon, geometry, members, tags });
+      if (!point || !validPoint(point.lat, point.lon) || !['node', 'way', 'relation'].includes(type) || !Number.isSafeInteger(id)) continue;
       if (!territory && inside && !inside(point) && !geometry?.some(inside) && !members?.some(member => inside(member) || member.geometry?.some(inside))) continue;
       const key = tags.building === 'cathedral' || tags.tourism === 'attraction' && categories.building.includes(tags.building) ? 'building' :
         categories.historic.includes(tags.historic) ? 'historic' : Object.keys(categories).find(k => categories[k].includes(tags[k]));

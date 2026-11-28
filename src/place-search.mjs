@@ -53,9 +53,9 @@ export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
       entry.signal?.throwIfAborted();
       let saved = await diskCache?.get(key).catch(() => undefined);
       if (saved?.expires > now()) { entry.pending = false; entry.expires = saved.expires; return saved.value; }
-      if (!saved && job && key.startsWith('places-v12/city/')) {
-        for (const version of ['v11', 'v10', 'v9']) {
-          saved = await diskCache?.get(key.replace('places-v12/', `places-${version}/`)).catch(() => undefined);
+      if (!saved && job && key.startsWith('places-v13/city/')) {
+        for (const version of ['v12', 'v11', 'v10', 'v9']) {
+          saved = await diskCache?.get(key.replace('places-v13/', `places-${version}/`)).catch(() => undefined);
           if (saved) break;
         }
       }
@@ -101,7 +101,7 @@ export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
   return async (city, { scope = 'nearby', signal } = {}) => {
     signal?.throwIfAborted();
     const identity = [city.id, city.latitude, city.longitude].join('/');
-    const key = 'places-v12/' + (scope === 'city' ? 'city/' + identity : ['nearby', city.latitude, city.longitude].join('/'));
+    const key = 'places-v13/' + (scope === 'city' ? 'city/' + identity : ['nearby', city.latitude, city.longitude].join('/'));
     return cached(results, key, 3600000, async (onProgress, jobSignal) => {
       const result = await discoverPlaces(city, {
         scope, fetchResponse, queryCache: diskCache, signal: jobSignal,

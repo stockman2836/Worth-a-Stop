@@ -10,6 +10,7 @@ test('place API separates city identities and local searches, validates scope an
       if (url.hostname === 'api.mymemory.translated.net') return Response.json({ responseStatus: 200, responseData: { translatedText: 'Translated name' } });
       if (url.hostname === 'geocoding-api.open-meteo.com') return Response.json({id:42,name:'Missing city',feature_code:'PPL'});
       const query = url.searchParams.get('data') ?? new URLSearchParams(options.body).get('data');
+      if (query.includes('around:1000')) return Response.json({elements:[{type:'node',id:501,lat:50,lon:14.001,tags:{name:'Cafe',amenity:'cafe',opening_hours:'24/7'}}]});
       if (query.includes('is_in(52,14)')) return new Promise((resolve, reject) => {
         console.log('SOURCE_STARTED', ++starts);
         options.signal.addEventListener('abort', () => { console.log('SOURCE_CANCELLED', ++cancellations); reject(options.signal.reason); }, { once: true });
@@ -44,6 +45,9 @@ test('place API separates city identities and local searches, validates scope an
     });
   });
   const request = params => fetch(address + '/api/places?' + new URLSearchParams({ lat: 50, lon: 14, ...params }));
+  const meals = await (await fetch(address + '/api/meal-venues?lat=50&lon=14')).json();
+  assert.equal(meals.venues[0].name, 'Cafe');
+  assert.equal((await fetch(address + '/api/meal-venues?lat=95&lon=14')).status, 400);
   const translate = body => fetch(address + '/api/name-translations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const item = { source: 'en', text: 'Landmark' };
   assert.deepEqual((await (await translate({ target: 'ru', items: [item] })).json()).translations, [{ ...item, translation: 'Translated name' }]);

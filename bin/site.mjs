@@ -8,8 +8,12 @@ import { createPlaceCache } from '../src/place-cache.mjs';
 import { fileURLToPath } from 'node:url';
 import { createWalkingRouter } from '../src/walking-router.mjs';
 import { createNameTranslator } from '../src/name-translator.mjs';
+import { createMealSearch } from '../src/meal-search.mjs';
 
 const assets = new Map([
+  ['/meal-options-panel.mjs', ['../web/meal-options-panel.mjs', 'text/javascript']],
+  ['/meal-options.mjs', ['../src/meal-options.mjs', 'text/javascript']],
+  ['/meal-venue.mjs', ['../src/meal-venue.mjs', 'text/javascript']],
   ['/pause-controls.mjs', ['../web/pause-controls.mjs', 'text/javascript']],
   ['/planned-pause.mjs', ['../src/planned-pause.mjs', 'text/javascript']],
   ['/return-trip-panel.mjs', ['../web/return-trip-panel.mjs', 'text/javascript']],
@@ -88,9 +92,27 @@ const assets = new Map([
 const searchPlaces = createPlaceSearch({ diskCache: process.env.PLACE_CACHE_DIR === 'off' ? undefined :
   createPlaceCache(process.env.PLACE_CACHE_DIR || fileURLToPath(new URL('../.cache/places', import.meta.url))) });
 const walkingRoute = createWalkingRouter();
+const searchMeals = createMealSearch({ cache: process.env.PLACE_CACHE_DIR === 'off' ? undefined :
+  createPlaceCache(fileURLToPath(new URL('../.cache/meal-venues', import.meta.url)), { limit: 200 }) });
 const translateNames = createNameTranslator({ cache: process.env.PLACE_CACHE_DIR === 'off' ? undefined :
   createPlaceCache(fileURLToPath(new URL('../.cache/translations', import.meta.url)), { limit: 3000 }) });
 const server = createServer(async (request, response) => {
+  if (request.method === 'GET' && request.url.startsWith('/api/meal-venues?')) {
+    const params = new URL(request.url, 'http://localhost').searchParams;
+    const point = { latitude: Number(params.get('lat')), longitude: Number(params.get('lon')) };
+    if (!params.get('lat')?.trim() || !params.get('lon')?.trim() || !Number.isFinite(point.latitude) || Math.abs(point.latitude) > 90 ||
+        !Number.isFinite(point.longitude) || Math.abs(point.longitude) > 180) { response.writeHead(400).end(); return; }
+    const controller = new AbortController();
+    response.once('close', () => { if (!response.writableEnded) controller.abort(); });
+    try {
+      const result = await searchMeals(point, { signal: controller.signal });
+      if (!response.destroyed) response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=900' }).end(JSON.stringify(result));
+    } catch (error) {
+      if (!response.destroyed) response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({
+        status: 'unavailable', venues: [], retryAt: error.retryAt ?? Date.now() + 60000 }));
+    }
+    return;
+  }
   if (request.method === 'POST' && request.url === '/api/name-translations') {
     let input;
     try {

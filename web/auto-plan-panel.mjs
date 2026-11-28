@@ -7,6 +7,7 @@ import { iconLabel } from './icons.mjs';
 import { interestIds, interestKey, normalizeInterests, readInterests, saveInterests } from './travel-interests.mjs';
 import { pauseControls } from './pause-controls.mjs';
 import { pauseWindow } from './planned-pause.mjs';
+import { mealOptionsPanel } from './meal-options-panel.mjs';
 
 const copy = {
   ru: { pace: 'Темп прогулки', paces: { relaxed: 'Спокойный', balanced: 'Обычный', active: 'Насыщенный' },
@@ -14,6 +15,7 @@ const copy = {
     pauseEmpty: 'Не удалось собрать прогулку с паузой в указанное время и соблюдением срока возвращения. Измени окно, длительность или время поездки.',
     pauseNote: 'Пауза — резерв времени рядом с отмеченной точкой. Заведение, его часы работы, поиск и дополнительные переходы не проверены.',
     pauseDuration: n => `Пауза: ${n} мин`,
+    mealNote: 'Заведение выбрано по данным OpenStreetMap. Переходы, окно обеда и возвращение проверены; часы показаны по опубликованным данным.',
     returnPoint: 'Выбери точку возвращения: точку старта или другую точку на карте.',
     returnBuffer: 'Укажи запас от 0 до 120 минут и оставь время на прогулку до отправления.',
     returnTitle: 'Возвращение', returnEmpty: 'Не удалось подобрать прогулку с подтверждённым возвращением вовремя. Измени время или точку возвращения.',
@@ -45,6 +47,7 @@ const copy = {
     pauseEmpty: 'No walk fits the requested break and return deadline. Change the break window, duration or trip times.',
     pauseNote: 'The break reserves time at the marked point. A venue, its opening hours, the search and any extra walking are not verified.',
     pauseDuration: n => `Break: ${n} min`,
+    mealNote: 'The venue comes from OpenStreetMap. Walking, the meal window and return are checked; opening hours use published data.',
     returnPoint: 'Choose a return point: your starting point or another point on the map.',
     returnBuffer: 'Choose a buffer from 0 to 120 minutes and leave time for the walk before departure.',
     returnTitle: 'Return', returnEmpty: 'No walk with a verified return before the deadline could be built. Change the time or return point.',
@@ -123,10 +126,16 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
   actions.append(apply, map); actions.hidden = true;
   element.append(heading, message, note, list, actions, mapHint);
   const clock = new Intl.DateTimeFormat(language, { timeZone: city.timezone || 'UTC', hour: '2-digit', minute: '2-digit' });
-  let active, proposal, expected, signature;
+  let active, proposal, expected, signature, renderSuggestion;
+  const meals = mealOptionsPanel(language, signal, result => {
+    if (!renderSuggestion || fingerprint() !== signature) { invalidate(); return false; }
+    timeline.clearDraft(); mapHint.hidden = true; renderSuggestion(result); return true;
+  });
+  note.after(meals.element);
   const fingerprint = () => JSON.stringify([itinerary.context(), pace.value, getInterests(), pause.value()]);
   function clear() {
-    active?.abort(); active = undefined; proposal = expected = signature = undefined;
+    active?.abort(); active = undefined; proposal = expected = signature = renderSuggestion = undefined;
+    meals.clear();
     timeline.clearDraft(); list.replaceChildren(); actions.hidden = true; note.textContent = ''; mapHint.hidden = true;
     message.removeAttribute('aria-busy'); run.disabled = false; iconLabel(run, 'sparkles', text.generate); cancel.hidden = true;
   }
@@ -180,41 +189,46 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
       });
       if (active !== controller || signal.aborted) return;
       if (signature !== fingerprint()) { invalidate(); return; }
-      proposal = result;
-      if (!result.stops.length) {
-        message.textContent = pauseSettings ? text.pauseEmpty : context.returnTrip ? text.returnEmpty : text.empty;
-        note.textContent = [(candidates.incomplete || result.failedRoutes || result.limited) && text.partial, result.skippedEvents > 0 && text.skipped].filter(Boolean).join(' ');
-        return;
-      }
-      message.textContent = text.summary(result.stops.length, result.walkingMinutes, clock.format(result.finish));
-      note.textContent = [text.unchanged, text.estimates, !context.origin && text.firstStop,
-        result.pause && text.pauseNote,
-        result.returnTrip && text.returnNote(clock.format(result.returnTrip.arrival), clock.format(result.returnTrip.deadline), result.returnTrip.bufferMinutes),
-        (candidates.incomplete || result.failedRoutes || result.limited) && text.partial,
-        candidates.stalePlaces && text.stale, result.unverifiedHours > 0 && text.unknown, result.skippedEvents > 0 && text.skipped,
-        interests.length && !result.entries.some(entry => entry.interests.length) && text.noInterestMatches].filter(Boolean).join(' ');
-      for (const entry of result.entries) {
-        const item = document.createElement('li');
-        const time = document.createElement('span'); time.className = 'event-time'; time.textContent = clock.format(entry.stop.type === 'event' ? entry.stop.start : entry.stop.type === 'pause' ? entry.visitStart : entry.arrival) + '–' + clock.format(entry.departure);
-        const link = document.createElement('a'); link.href = entry.stop.url; link.textContent = placeName(entry.stop, language);
-        const reason = document.createElement('p');
-        reason.dataset.hours = entry.hours;
-        reason.textContent = [entry.hours === 'pause' ? text.pauseDuration(entry.stop.duration) : entry.hours === 'event' ? text.event : entry.hours === 'fits' ? text.verified : text.unknown,
-          entry.stop.type === 'place' && text.duration(entry.stop.duration), entry.walkingMinutes > 0 && text.walk(entry.walkingMinutes),
-          entry.waiting > 0 && text.arrive(clock.format(entry.arrival)), entry.waiting > 0 && text.wait(entry.waiting),
-          entry.variety && entry.stop.type === 'place' && text.variety,
-          entry.interests.length && text.interestMatch + ': ' + entry.interests.map(id => text.interestNames[id]).join(', ')].filter(Boolean).join(' · ');
-        item.append(time, link, reason); list.append(item);
-      }
-      if (result.returnTrip) {
-        const item = document.createElement('li'); item.className = 'auto-plan-return';
-        const time = document.createElement('span'); time.className = 'event-time'; time.textContent = clock.format(result.returnTrip.arrival);
-        const link = document.createElement('a'); link.href = result.returnTrip.stop.url; link.textContent = text.returnTitle;
-        const reason = document.createElement('p'); reason.textContent = text.walk(Math.ceil(result.returnTrip.leg.duration / 60));
-        item.append(time, link, reason); list.append(item);
-      }
-      actions.hidden = false; iconLabel(apply, 'check', context.stops.length ? text.replace : text.apply);
-      iconLabel(run, 'sparkles', text.again);
+      renderSuggestion = result => {
+        proposal = result; list.replaceChildren();
+        if (!result.stops.length) {
+          message.textContent = pauseSettings ? text.pauseEmpty : context.returnTrip ? text.returnEmpty : text.empty;
+          note.textContent = [(candidates.incomplete || result.failedRoutes || result.limited) && text.partial, result.skippedEvents > 0 && text.skipped].filter(Boolean).join(' ');
+          return;
+        }
+        message.textContent = text.summary(result.stops.length, result.walkingMinutes, clock.format(result.finish));
+        note.textContent = [text.unchanged, text.estimates, !context.origin && text.firstStop,
+          result.pause && (result.pause.mealVenue ? text.mealNote : text.pauseNote),
+          result.returnTrip && text.returnNote(clock.format(result.returnTrip.arrival), clock.format(result.returnTrip.deadline), result.returnTrip.bufferMinutes),
+          (candidates.incomplete || result.failedRoutes || result.limited) && text.partial,
+          candidates.stalePlaces && text.stale, result.unverifiedHours > 0 && text.unknown, result.skippedEvents > 0 && text.skipped,
+          interests.length && !result.entries.some(entry => entry.interests.length) && text.noInterestMatches].filter(Boolean).join(' ');
+        for (const entry of result.entries) {
+          const item = document.createElement('li');
+          const time = document.createElement('span'); time.className = 'event-time'; time.textContent = clock.format(entry.stop.type === 'event' ? entry.stop.start : entry.stop.type === 'pause' ? entry.visitStart : entry.arrival) + '–' + clock.format(entry.departure);
+          const link = document.createElement('a'); link.href = entry.stop.url; link.textContent = placeName(entry.stop, language);
+          const reason = document.createElement('p');
+          reason.dataset.hours = entry.hours;
+          reason.textContent = [entry.hours === 'pause' ? text.pauseDuration(entry.stop.duration) : entry.hours === 'event' ? text.event : entry.hours === 'fits' ? text.verified : text.unknown,
+            entry.stop.mealVenue && (entry.venueHours === 'fits' ? text.verified : text.unknown),
+            entry.stop.type === 'place' && text.duration(entry.stop.duration), entry.walkingMinutes > 0 && text.walk(entry.walkingMinutes),
+            entry.waiting > 0 && text.arrive(clock.format(entry.arrival)), entry.waiting > 0 && text.wait(entry.waiting),
+            entry.variety && entry.stop.type === 'place' && text.variety,
+            entry.interests.length && text.interestMatch + ': ' + entry.interests.map(id => text.interestNames[id]).join(', ')].filter(Boolean).join(' · ');
+          item.append(time, link, reason); list.append(item);
+        }
+        if (result.returnTrip) {
+          const item = document.createElement('li'); item.className = 'auto-plan-return';
+          const time = document.createElement('span'); time.className = 'event-time'; time.textContent = clock.format(result.returnTrip.arrival);
+          const link = document.createElement('a'); link.href = result.returnTrip.stop.url; link.textContent = text.returnTitle;
+          const reason = document.createElement('p'); reason.textContent = text.walk(Math.ceil(result.returnTrip.leg.duration / 60));
+          item.append(time, link, reason); list.append(item);
+        }
+        actions.hidden = false; iconLabel(apply, 'check', context.stops.length ? text.replace : text.apply);
+        iconLabel(run, 'sparkles', text.again);
+      };
+      renderSuggestion(result);
+      meals.start(result, { origin: context.origin, returnTrip: context.returnTrip, timeZone: city.timezone });
     } catch (error) {
       if (active !== controller || signal.aborted) return;
       message.textContent = error.name === 'TimeoutError' ? text.timeout : text.error;

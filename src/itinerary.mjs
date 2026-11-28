@@ -5,7 +5,7 @@ import { validTerritory } from './territory.mjs';
 import { plannedPause } from './planned-pause.mjs';
 
 export function itineraryStop(item, type) {
-  if (type === 'pause') return plannedPause({ kind: item.pauseKind, start: item.start, end: item.end, duration: item.duration }, item.location);
+  if (type === 'pause') return plannedPause({ kind: item.pauseKind, start: item.start, end: item.end, duration: item.duration }, item.location, item.mealVenue);
   const title = item.title || item.name;
   const url = new URL(item.url);
   if (!['place', 'event'].includes(type) || typeof title !== 'string' || !title.trim() || !['http:', 'https:'].includes(url.protocol) || url.username || url.password) {

@@ -7,7 +7,7 @@ const conflicts = new Set(['closed-arrival', 'closes-during', 'break']);
 function assess(stops, legs, start, timeZone) {
   const times = arrivalTimes(stops, legs, start);
   const visits = stops.map((stop, i) => ({ stop, ...times[i],
-    hours: stop.type === 'place' ? visitOpeningState(stop.hours, times[i].arrival, times[i].departure, timeZone).state : null }));
+    hours: stop.type === 'place' || stop.mealVenue ? visitOpeningState(stop.hours, stop.mealVenue ? times[i].visitStart : times[i].arrival, times[i].departure, timeZone).state : null }));
   const complete = legs.length === stops.length - 1 && legs.every((leg, i) =>
     leg.status === 'ok' && leg.from.id === stops[i].id && leg.to.id === stops[i + 1].id);
   return {
@@ -40,7 +40,8 @@ export async function compareStopOrder(stops, id, legs, start, timeZone, { signa
     if (!moved && original.arrival === visit.arrival && original.departure === visit.departure) return true;
     if (visit.stop.type === 'place') return visit.hours === 'fits';
     if (visit.stop.type === 'return') return visit.arrival !== null && !visit.reason && visit.late === 0;
-    if (visit.stop.type === 'pause') return visit.arrival !== null && !visit.reason && visit.late === 0;
+    if (visit.stop.type === 'pause') return visit.arrival !== null && !visit.reason && visit.late === 0 &&
+      (!visit.stop.mealVenue || visit.hours === 'fits');
     return visit.arrival !== null && Number.isFinite(visit.stop.start) && visit.late === 0 && visit.reason !== 'event-ended';
   });
   return { before, after, applicable };

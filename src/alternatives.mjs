@@ -40,6 +40,8 @@ export async function findAlternatives(stops, id, legs, start, timeZone, { signa
     const destination = trial.findIndex(stop => stop.type === 'return');
     if (destination >= 0 && (times[destination].arrival === null || times[destination].late > 0)) continue;
     if (trial.some((stop, i) => stop.type === 'pause' && (times[i].arrival === null || times[i].reason || times[i].late > 0))) continue;
+    if (trial.some((stop, i) => stop.mealVenue &&
+        visitOpeningState(stop.hours, times[i].visitStart, times[i].departure, timeZone).state !== 'fits')) continue;
     alternatives.push({ stop: replacement, km: place.km, arrival: visit.arrival, departure: visit.departure });
   }
   return { alternatives, stale, incomplete };

@@ -2,6 +2,7 @@ import { localInstant } from './opening-hours.mjs';
 import { eventLocation } from './event-location.mjs';
 import { nextDate } from './day-agenda.mjs';
 import { pauseMemory } from './city-plan-state.mjs';
+import { mealVenue } from './meal-venue.mjs';
 
 const kinds = ['meal', 'rest'];
 export function validPauseSettings(value) {
@@ -17,16 +18,19 @@ export function pauseWindow(settings, day, zone, start, end) {
       Math.max(start, from) + settings.duration * 60000 > Math.min(end, to)) throw Error('Invalid pause options');
   return { kind: settings.kind, start: from, end: to, duration: settings.duration };
 }
-export function plannedPause(window, point) {
+export function plannedPause(window, point, venue) {
   if (!kinds.includes(window?.kind) || !Number.isFinite(window.start) || !Number.isFinite(window.end) ||
       !Number.isFinite(new Date(window.start).getTime()) || !Number.isFinite(new Date(window.end).getTime()) ||
       !Number.isInteger(window.duration) || window.duration < 5 || window.duration > 180 ||
       window.end <= window.start || !eventLocation(point?.latitude, point?.longitude)) throw Error('Invalid planned pause');
   const location = eventLocation(point.latitude, point.longitude);
-  const url = `https://www.openstreetmap.org/?mlat=${location.latitude}&mlon=${location.longitude}#map=17/${location.latitude}/${location.longitude}`;
-  const names = window.kind === 'meal' ? { ru: 'Обеденная пауза', en: 'Meal break' } : { ru: 'Пауза на отдых', en: 'Rest break' };
+  const selected = venue === undefined ? undefined : mealVenue(venue);
+  if (selected && (window.kind !== 'meal' || selected.latitude !== location.latitude || selected.longitude !== location.longitude)) throw Error('Invalid meal location');
+  const url = selected?.url ?? `https://www.openstreetmap.org/?mlat=${location.latitude}&mlon=${location.longitude}#map=17/${location.latitude}/${location.longitude}`;
+  const names = selected?.names ?? (window.kind === 'meal' ? { ru: 'Обеденная пауза', en: 'Meal break' } : { ru: 'Пауза на отдых', en: 'Rest break' });
   return { id: JSON.stringify(['pause', url, window.kind, window.start, window.end]), type: 'pause', pauseKind: window.kind,
-    title: names.en, names, url, location, start: window.start, end: window.end, duration: window.duration, hours: null, venue: null };
+    title: selected?.name ?? names.en, names, url, location, start: window.start, end: window.end, duration: window.duration,
+    hours: selected?.hours ?? null, venue: selected?.name ?? null, ...(selected && { mealVenue: selected }) };
 }
 
 const defaults = () => ({ enabled: false, kind: 'meal', from: '13:00', to: '15:00', duration: 45 });

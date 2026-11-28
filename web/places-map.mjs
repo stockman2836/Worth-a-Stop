@@ -256,6 +256,8 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     title.href = stop.url; title.textContent = nameFor(stop);
     note.textContent = labels.language === 'ru' ? 'Ориентир для паузы. Место не подобрано; поиск и дополнительные переходы не рассчитаны.'
       : 'Reference point for a break. No venue selected; searching and extra walking are not calculated.';
+    if (stop.mealVenue) note.textContent = (labels.language === 'ru' ? 'Обед в выбранном заведении. Часы по данным OSM: ' : 'Meal at the selected venue. OSM opening hours: ') +
+      (stop.hours || (labels.language === 'ru' ? 'не опубликованы' : 'not published'));
     popup.append(title, note);
     const icon = L.divIcon({ className: 'route-stop pause-stop' + (draft ? ' draft-stop' : ''), html: markerFace('pause'), iconSize: [24, 24], iconAnchor: [-16, 12] });
     return L.marker([stop.location.latitude, stop.location.longitude], { icon, title: `${number} · ${nameFor(stop)}`, alt: nameFor(stop), zIndexOffset: 1900 }).bindPopup(popup);

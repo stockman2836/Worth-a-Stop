@@ -19,6 +19,8 @@ const copy = {
     pauseMinutes: 'Длительность паузы, мин', pauseStart: 'Начало паузы', pauseLate: 'Окончание позже окна на',
     pauseNote: 'Резерв времени рядом с отмеченной точкой. Место для паузы не подобрано; поиск и дополнительные переходы не рассчитаны.',
     pauseWindow: 'Окно паузы',
+    mealNote: 'Обед в выбранном заведении. Данные и часы работы — из OpenStreetMap; проверьте их перед поездкой.',
+    mealUnknown: 'Часы заведения требуют проверки по источнику.',
     saved: 'План сохранён на этом устройстве.', temporary: 'Не удалось сохранить план. Изменения доступны в текущей вкладке.',
     added: 'Остановка добавлена в план.', duplicate: 'Эта остановка уже в плане.', up: 'Выше', down: 'Ниже', remove: 'Убрать',
     minutes: 'Время посещения, мин', unknown: 'Время события не указано', invalid: 'Укажите от 1 до 1440 минут.',
@@ -54,6 +56,8 @@ const copy = {
     pauseMinutes: 'Break duration, min', pauseStart: 'Break starts', pauseLate: 'Break ends beyond its window by',
     pauseNote: 'Time reserved near the marked point. No venue is selected; finding one and extra walking are not calculated.',
     pauseWindow: 'Break window',
+    mealNote: 'Meal at the selected venue. Data and opening hours come from OpenStreetMap; check them before travelling.',
+    mealUnknown: 'Check the venue opening hours with the source.',
     saved: 'Plan saved on this device.', temporary: 'Could not save the plan. Changes are available in this tab.',
     added: 'Stop added to the plan.', duplicate: 'This stop is already in the plan.', up: 'Move up', down: 'Move down', remove: 'Remove',
     minutes: 'Visit duration, min', unknown: 'Event time unspecified', invalid: 'Enter 1 to 1440 minutes.',
@@ -238,8 +242,8 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
         time.waiting > 0 && text.waiting + ' · ' + minutes.format(time.waiting),
         time.late > 0 && (currentStops[index].type === 'pause' ? text.pauseLate : text.late) + ' · ' + minutes.format(time.late),
         time.reason && !(currentStops[index].type === 'pause' && time.late > 0) && text.reasons[time.reason]].filter(Boolean).join(' · ');
-      if (currentStops[index].type === 'place') {
-        const check = visitOpeningState(currentStops[index].hours, time.arrival, time.departure, city.timezone);
+      if (currentStops[index].type === 'place' || currentStops[index].mealVenue) {
+        const check = visitOpeningState(currentStops[index].hours, currentStops[index].mealVenue ? time.visitStart : time.arrival, time.departure, city.timezone);
         const warning = item.querySelector('.visit-hours');
         warning.dataset.state = check.state;
         if (check.state === 'fits') warning.textContent = text.fits;
@@ -251,7 +255,7 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
           warning.textContent = text.closes + ' · ' + when.format(check.closedAt) + ' · ' + text.remaining +
             ' · ' + minutes.format(check.availableMinutes);
           conflicts++;
-        } else warning.textContent = check.state === 'unknown-time' ? text.visitUnknown : text.hoursUnknown;
+        } else warning.textContent = check.state === 'unknown-time' ? text.visitUnknown : currentStops[index].mealVenue ? text.mealUnknown : text.hoursUnknown;
       }
     }
     const returnTrip = returning.trip();
@@ -331,9 +335,10 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
       } else {
         if (stop.type === 'pause') {
           const detail = document.createElement('p'); detail.className = 'pause-description';
-          detail.textContent = `${text.pauseWindow}: ${when.format(stop.start)} – ${when.format(stop.end)}. ${text.pauseNote}`;
+          detail.textContent = `${text.pauseWindow}: ${when.format(stop.start)} – ${when.format(stop.end)}. ${stop.mealVenue ? text.mealNote : text.pauseNote}`;
           item.append(detail);
-        } else {
+        }
+        if (stop.type === 'place' || stop.mealVenue) {
           const hours = document.createElement('p');
           hours.className = 'saved-hours';
           hours.textContent = stop.hours ? text.hours + ' · ' + stop.hours : '';

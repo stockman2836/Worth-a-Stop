@@ -152,5 +152,5 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
     ...(returnTrip && { returnTrip: finalReturn ?? null }),
     ...(pauseOptions && { pause: stops.find(stop => stop.type === 'pause') ?? null }),
     walkingMinutes: routeLegs.reduce((sum, leg) => sum + Math.ceil(leg.duration / 60), 0),
-    interests, failedRoutes, limited, skippedEvents, unverifiedHours: entries.filter(entry => entry.hours === 'unknown').length };
+    interests, walkingLimit: profile.walk, failedRoutes, limited, skippedEvents, unverifiedHours: entries.filter(entry => entry.hours === 'unknown').length };
 }

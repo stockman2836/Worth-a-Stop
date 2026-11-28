@@ -3,11 +3,11 @@ import { pauseSettingsStore, validPauseSettings } from './planned-pause.mjs';
 const copy = {
   ru: { title: 'Пауза в автоплане', enable: 'Выделить время на обед или отдых', kind: 'Для чего', meal: 'Обед', rest: 'Отдых',
     from: 'Начать не раньше', to: 'Закончить не позже', duration: 'Длительность, мин',
-    hint: 'Одна пауза для нового предложения. Конкретное заведение не выбрано; поиск заведения и дополнительные переходы пока не рассчитаны.',
+    hint: 'Одна пауза для нового предложения. Для обеда предложим заведения после расчёта маршрута; выбор остаётся за тобой.',
     invalid: 'Укажи окно времени и длительность от 5 до 180 минут.', unsaved: 'Настройки доступны в этой вкладке; сохранить их не удалось.' },
   en: { title: 'Break in the auto plan', enable: 'Allow time for a meal or rest', kind: 'Purpose', meal: 'Meal', rest: 'Rest',
     from: 'Start no earlier than', to: 'Finish no later than', duration: 'Duration, min',
-    hint: 'One break for a new suggestion. No venue is selected; finding one and any extra walking are not calculated yet.',
+    hint: 'One break for a new suggestion. Meal venues are offered after route planning; you choose whether to include one.',
     invalid: 'Choose a time window and a duration from 5 to 180 minutes.', unsaved: 'Settings are available in this tab but could not be saved.' },
 };
 

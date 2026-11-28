@@ -448,6 +448,13 @@ main { width: min(74rem, calc(100% - 4rem)); }
 .pause-hint:empty { display: none; }
 .pause-stop { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning); }
 .pause-description { font-size: .8rem; color: var(--muted); line-height: 1.6; }
+.meal-options { margin-block: 1rem; padding: 1rem; border: 1px solid var(--line); border-radius: .75rem; background: var(--surface-soft); }
+.meal-options h3 { font-size: .95rem; margin-top: 0; }
+.meal-options-list { list-style: none; padding: 0; display: grid; gap: .75rem; }
+.meal-options-list li { border-top: 1px solid var(--line); padding-top: .75rem; }
+.meal-options-list p { margin-block: .4rem; font-size: .8rem; }
+.meal-options [aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 2px; }
+.meal-option-reasons[data-hours="unknown"] { color: var(--warning); }
 .return-trip-status { font-size: .8rem; color: var(--muted); margin-bottom: 0; }
 .return-trip-status:empty { display: none; }
 .return-trip-status[data-state="late"], .return-trip-status[data-state="invalid"] { color: var(--danger); }

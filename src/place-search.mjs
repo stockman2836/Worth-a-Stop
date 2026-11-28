@@ -52,8 +52,11 @@ export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
       entry.signal?.throwIfAborted();
       let saved = await diskCache?.get(key).catch(() => undefined);
       if (saved?.expires > now()) { entry.pending = false; entry.expires = saved.expires; return saved.value; }
-      if (!saved && job && key.startsWith('places-v10/city/')) {
-        saved = await diskCache?.get(key.replace('places-v10/', 'places-v9/')).catch(() => undefined);
+      if (!saved && job && key.startsWith('places-v11/city/')) {
+        for (const version of ['v10', 'v9']) {
+          saved = await diskCache?.get(key.replace('places-v11/', `places-${version}/`)).catch(() => undefined);
+          if (saved) break;
+        }
       }
       const fallback = previous ?? saved?.value;
       if (job && Array.isArray(fallback?.places) && fallback.boundary &&
@@ -97,11 +100,11 @@ export function createPlaceSearch({ fetchResponse = fetch, now = Date.now,
   return async (city, { scope = 'nearby', signal } = {}) => {
     signal?.throwIfAborted();
     const identity = [city.id, city.latitude, city.longitude].join('/');
-    const key = 'places-v10/' + (scope === 'city' ? 'city/' + identity : ['nearby', city.latitude, city.longitude].join('/'));
+    const key = 'places-v11/' + (scope === 'city' ? 'city/' + identity : ['nearby', city.latitude, city.longitude].join('/'));
     return cached(results, key, 3600000, (onProgress, jobSignal) => discoverPlaces(city, {
       scope, fetchResponse, queryCache: diskCache, signal: jobSignal,
       onProgress: scope === 'city' ? onProgress : undefined,
-      resolveBoundary: () => cached(boundaries, 'boundary-v2/' + identity, 86400000,
+      resolveBoundary: () => cached(boundaries, 'boundary-v3/' + identity, 86400000,
         () => discoverBoundary(city, { fetchResponse, queryCache: diskCache,
           signal: AbortSignal.any([jobSignal, AbortSignal.timeout(35000)]) }), false, jobSignal),
     }), true, signal);

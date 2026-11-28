@@ -46,6 +46,11 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     state.textContent = stateFor(item)?.label || '';
     state.dataset.state = stateFor(item)?.state || 'unknown';
     popup.append(title, state, hours);
+    if (item.territory && labels.territory) {
+      const paragraph = document.createElement('p'), territory = document.createElement('a');
+      territory.href = item.territory.url; territory.textContent = labels.territory(item.territory);
+      paragraph.append(territory); popup.append(paragraph);
+    }
     return popup;
   }
   function decorate(marker, item) {
@@ -55,7 +60,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     element.dataset.group = group; element.dataset.state = stateFor(item)?.state || 'unknown';
     element.dataset.prominence = item.prominence || '';
     const category = item.kind === 'place' ? labels[item.category] || labels[placeSymbols[group].label] : labels.legendEvents;
-    element.title = [nameFor(item), category, item.mapLabel, stateFor(item)?.label].filter(Boolean).join(' · ');
+    element.title = [nameFor(item), category, item.territory && labels.territory?.(item.territory), item.mapLabel, stateFor(item)?.label].filter(Boolean).join(' · ');
     element.setAttribute('aria-label', element.title);
   }
   function markerFor(item, focus = false) {

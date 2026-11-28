@@ -29,6 +29,14 @@ test('matches GeoNames identity before names and ignores countries and conflicti
   assert.equal(result.name, 'Local name');
 });
 
+test('retains only inner way references needed to discover enclosed territories', async () => {
+  const result = await lookup([{ ...relation(1, {}), members: [
+    { type: 'way', ref: 11, role: 'inner' }, { type: 'way', ref: 12, role: 'outer' },
+    { type: 'relation', ref: 13, role: 'subarea' },
+  ] }]);
+  assert.deepEqual(result.innerWays, [11]);
+});
+
 test('uses the existing city identity when OSM lacks the requested-language translation', async () => {
   const result = await cityBoundary({ ...city, name: 'Кошице' }, { fetchResponse: async url => {
     if (url.hostname === 'geocoding-api.open-meteo.com') {

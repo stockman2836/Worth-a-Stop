@@ -6,6 +6,7 @@ import { todayIn } from './day-agenda.mjs';
 import { iconLabel } from './icons.mjs';
 import { updateLegend } from './map-symbols.mjs';
 import { placeList } from './place-list.mjs';
+import { territoryLabel } from './territory.mjs';
 
 const copy = {
   ru: { moreLoading: 'Загружаем остальные районы… Найденные места уже можно смотреть.', partial: 'Часть районов пока недоступна. Загруженные места показаны; повторите через минуту.', title: 'Места города', loading: 'Ищем границу города и интересные места…', empty: 'В границах города подходящих мест не найдено.',
@@ -254,7 +255,8 @@ export function placesPanel(city, language, signal, open, selection) {
       function select(index) {
         listView.select(index);
       }
-      map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name }, select, view);
+      map = placesMap(mapBox, city, places, { ...text, name: place => place.names[language] || place.name,
+        territory: value => territoryLabel(value, language) }, select, view);
       map.setEvents(events);
       map.setEventsVisible(eventToggle.checked);
       map.setRoute(route.legs, route.stops, route.focused);
@@ -271,6 +273,11 @@ export function placesPanel(city, language, signal, open, selection) {
       boundaryLink.href = boundary.url;
       boundaryLink.textContent = `${text.boundary}: ${boundary.name}`;
       status.append(' · ', boundaryLink);
+      for (const enclave of boundary.enclaves || []) {
+        const link = document.createElement('a'); link.href = enclave.url;
+        link.textContent = territoryLabel(enclave, language);
+        status.append(' · ', link);
+      }
       retry.hidden = loading || !stale && !incomplete;
       if (!retry.hidden) unlockRetry(retryAt);
     } catch (error) {

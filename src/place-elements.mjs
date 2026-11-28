@@ -58,7 +58,7 @@ export async function placeElements(city, boundary, { signal, fetchResponse = fe
     try {
       result = await overpassQuery(query, {
         signal, fetchResponse, extent: box, queryTimeout: tiled ? 8 : boundary ? 20 : 8, subdivide,
-        accept: elements => tiled || !boundary || elements.some(element => element.type === 'area'),
+        accept: elements => tiled || !boundary || elements.some(element => element.type === 'area' && element.id === 3600000000 + boundary.relation),
       });
     } catch (error) {
       if (error.code === 'PLACE_QUERY_TOO_LARGE') {

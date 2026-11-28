@@ -10,14 +10,14 @@ export async function cityBoundary(city, options = {}) {
   if (!Number.isFinite(latitude) || Math.abs(latitude) > 90 || !Number.isFinite(longitude) || Math.abs(longitude) > 180 ||
       !Number.isSafeInteger(id) || id < 1 || typeof name !== 'string' || !name.trim() || name.length > 200) throw Error('Invalid city');
   // Only consider boundaries containing the selected point, never a worldwide name match.
-  const elements = await overpassQuery(`is_in(${latitude},${longitude});area._[boundary=administrative]->.boundaries;rel(pivot.boundaries);out tags bb;`, {
+  const elements = await overpassQuery(`is_in(${latitude},${longitude});area._[boundary=administrative]->.boundaries;rel(pivot.boundaries);rel._[admin_level~"^(4|5|6|7|8|9|10)$"];out body bb;`, {
     ...options, extent: { minlat: latitude, maxlat: latitude, minlon: longitude, maxlon: longitude }, queryTimeout: 6,
   });
   const normalize = value => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[’']/g, '').replace(/\s+/g, ' ').trim();
   function candidates(requestedNames) {
     const requested = requestedNames.map(normalize);
     const matches = [];
-    for (const { type, id: relation, tags = {}, bounds } of elements) {
+    for (const { type, id: relation, tags = {}, bounds, members } of elements) {
       const level = Number(tags.admin_level);
       if (type !== 'relation' || !Number.isSafeInteger(relation) || relation < 1 || tags.boundary !== 'administrative' ||
           !Number.isInteger(level) || level < 4 || level > 10 || typeof tags.name !== 'string') continue;
@@ -28,7 +28,8 @@ export async function cityBoundary(city, options = {}) {
       const identity = geonames === String(id);
       if (!identity && !names.some(value => requested.includes(normalize(value)))) continue;
       const score = (identity ? 100 : 0) + (/^(city|town|village|municipality)$/.test(tags.place) ? 20 : 0) + level;
-      matches.push({ relation, name: tags.name, bounds, score });
+      const innerWays = members?.filter(member => member.type === 'way' && member.role === 'inner').map(member => member.ref);
+      matches.push({ relation, name: tags.name, bounds, score, ...(innerWays && { innerWays }) });
     }
     return matches.sort((a, b) => b.score - a.score);
   }
@@ -54,8 +55,8 @@ export async function cityBoundary(city, options = {}) {
     }
   }
   if (!matches.length || matches.length > 1 && matches[0].score === matches[1].score) throw boundaryUnavailable();
-  const { relation, name: boundaryName, bounds } = matches[0];
-  const boundary = { relation, name: boundaryName, bounds, url: `https://www.openstreetmap.org/relation/${relation}` };
+  const { relation, name: boundaryName, bounds, innerWays } = matches[0];
+  const boundary = { relation, name: boundaryName, bounds, innerWays, url: `https://www.openstreetmap.org/relation/${relation}` };
   const shape = await cityBoundaryParts(boundary, city, options);
   return { ...boundary, ...shape };
 }

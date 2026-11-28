@@ -3,6 +3,7 @@ import { nextDate, todayIn } from './day-agenda.mjs';
 import { walkingPanel } from './walking-panel.mjs';
 import { arrivalTimes } from './arrival-times.mjs';
 import { localInstant, visitOpeningState } from './opening-hours.mjs';
+import { territoryLabel } from './territory.mjs';
 import { alternativesPanel } from './alternatives-panel.mjs';
 import { orderPanel } from './order-panel.mjs';
 import { startingPointStore, withStartingPoint } from './starting-point.mjs';
@@ -287,6 +288,11 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
       link.href = stop.url;
       link.textContent = stop.names?.[language] || stop.title;
       item.append(link);
+      if (stop.territory) {
+        const territory = document.createElement('a'); territory.className = 'place-territory';
+        territory.href = stop.territory.url; territory.textContent = territoryLabel(stop.territory, language);
+        item.append(territory);
+      }
       const timing = document.createElement('p');
       timing.className = 'stop-timing';
       item.append(timing);

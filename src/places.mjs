@@ -2,6 +2,8 @@ import { cityBoundary } from './city-boundary.mjs';
 import { containsPoint, cityBoundaryParts } from './city-boundary-parts.mjs';
 import { prominenceSignals, classifyProminence } from './place-prominence.mjs';
 import { categories, documentedCategories, placeElements } from './place-elements.mjs';
+import { validTerritory } from './territory.mjs';
+import { cityEnclaves } from './city-enclaves.mjs';
 
 function importance(tags, translations) {
   const landmark = categories.building.includes(tags.building) || tags.tourism === 'attraction' || categories.historic.includes(tags.historic);
@@ -48,9 +50,25 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
     if (shape) boundary = { ...boundary, ...shape };
   }
   let inside = boundary?.segments ? containsPoint(boundary.segments) : null;
+  let records = [];
+  let enclaves = boundary?.enclaves ?? [];
+  const describe = ({ bounds, ...territory }) => territory;
+  function collect(elements, territory) {
+    const additions = elements.map(element => {
+      const { territory: ignored, ...record } = element;
+      return territory ? { ...record, territory } : record;
+    });
+    if (territory) {
+      const ids = new Set(additions.map(element => `${element.type}/${element.id}`));
+      records = records.filter(element => !ids.has(`${element.type}/${element.id}`)).concat(additions);
+    } else {
+      records = additions;
+    }
+  }
   const options = { signal, fetchResponse, queryCache,
     onElements: onProgress ? elements => {
-      const snapshot = present(elements, true);
+      collect(elements);
+      const snapshot = present(records, true);
       if (snapshot.places.length) onProgress(snapshot);
     } : undefined };
   let data;
@@ -63,15 +81,34 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
     inside = containsPoint(shape.segments);
     data = await placeElements(city, boundary, options);
   }
-  const { elements, incomplete } = data;
-  return present(elements, incomplete);
+  collect(data.elements);
+  let incomplete = Boolean(data.incomplete || boundary?.incomplete);
+  if (boundary?.innerWays?.length && boundary.enclaves === undefined) {
+    if (onProgress) onProgress(present(records, true));
+    try { enclaves = await cityEnclaves(boundary, { signal, fetchResponse, queryCache }); }
+    catch (error) { signal?.throwIfAborted(); incomplete = true; }
+  }
+  if (enclaves.length && onProgress) onProgress(present(records, true));
+  for (const enclave of enclaves) {
+    signal?.throwIfAborted();
+    try {
+      const additional = await placeElements(city, enclave, { signal, fetchResponse, queryCache });
+      collect(additional.elements, describe(enclave));
+      incomplete ||= additional.incomplete;
+      if (onProgress) onProgress(present(records, true));
+    } catch (error) {
+      signal?.throwIfAborted();
+      incomplete = true;
+    }
+  }
+  return present(records, incomplete);
 
   function present(elements, incomplete) {
     const places = [];
-    for (const { type, id, lat, lon, center, geometry, members, tags = {} } of elements) {
+    for (const { type, id, lat, lon, center, geometry, members, territory, tags = {} } of elements) {
       const point = elementPoint({ center, lat, lon, geometry, members });
       if (!validPoint(point.lat, point.lon) || !['node', 'way', 'relation'].includes(type) || !Number.isSafeInteger(id)) continue;
-      if (inside && !inside(point) && !geometry?.some(inside) && !members?.some(member => inside(member) || member.geometry?.some(inside))) continue;
+      if (!territory && inside && !inside(point) && !geometry?.some(inside) && !members?.some(member => inside(member) || member.geometry?.some(inside))) continue;
       const key = tags.building === 'cathedral' || tags.tourism === 'attraction' && categories.building.includes(tags.building) ? 'building' :
         categories.historic.includes(tags.historic) ? 'historic' : Object.keys(categories).find(k => categories[k].includes(tags[k]));
       const name = tags.name;
@@ -87,9 +124,10 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
         rank: importance(tags, signals.languages),
         signals,
         identity: tags.wikidata,
+        ...(validTerritory(territory) && { territory }),
         url: `https://www.openstreetmap.org/${type}/${id}` });
     }
-    places.sort((a, b) => b.rank - a.rank || a.km - b.km);
+    places.sort((a, b) => b.rank - a.rank || Number(Boolean(b.territory)) - Number(Boolean(a.territory)) || a.km - b.km);
     const unique = [];
     const identities = new Set(), names = new Map();
     const normalize = value => value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().trim();
@@ -102,6 +140,7 @@ export async function nearbyPlaces(city, { signal, fetchResponse = fetch, scope 
       if (!boundary && unique.length === 12) break;
     }
     const result = classifyProminence(unique);
-    return boundary ? { places: result, boundary: { name: boundary.name, url: boundary.url }, ...(incomplete && { incomplete }) } : result;
+    return boundary ? { places: result, boundary: { name: boundary.name, url: boundary.url,
+      ...(enclaves.length && { enclaves: enclaves.map(describe) }) }, ...(incomplete && { incomplete }) } : result;
   }
 }

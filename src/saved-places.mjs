@@ -1,15 +1,19 @@
+import { validTerritory } from './territory.mjs';
+
 function validPlaces(places, limit) {
   return Array.isArray(places) && places.length <= limit && places.every(place =>
     typeof place?.name === 'string' && typeof place.names === 'object' && place.names !== null &&
     Number.isFinite(place.latitude) && Math.abs(place.latitude) <= 90 &&
     Number.isFinite(place.longitude) && Math.abs(place.longitude) <= 180 &&
     Number.isFinite(place.km) && place.km >= 0 &&
-    /^https:\/\/www\.openstreetmap\.org\/(node|way|relation)\/\d+$/.test(place.url));
+    /^https:\/\/www\.openstreetmap\.org\/(node|way|relation)\/\d+$/.test(place.url) &&
+    (place.territory === undefined || validTerritory(place.territory)));
 }
 
 function validBoundary(boundary) {
   return typeof boundary?.name === 'string' && boundary.name.trim() &&
-    /^https:\/\/www\.openstreetmap\.org\/relation\/[1-9]\d*$/.test(boundary.url);
+    /^https:\/\/www\.openstreetmap\.org\/relation\/[1-9]\d*$/.test(boundary.url) &&
+    (boundary.enclaves === undefined || Array.isArray(boundary.enclaves) && boundary.enclaves.every(validTerritory));
 }
 
 const failures = new WeakMap();
@@ -37,7 +41,7 @@ export async function loadPlaces(city, { signal, fetchResponse = fetch, storage,
   try {
     const blocked = cooldown.get(key);
     if (blocked?.retryAt > Date.now()) throw blocked;
-    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '9' });
+    const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '10' });
     if (scope === 'city') { query.set('id', city.id); query.set('name', city.name); }
     const response = await fetchResponse('/api/places?' + query, { signal });
     const payload = await response.json().catch(() => undefined);

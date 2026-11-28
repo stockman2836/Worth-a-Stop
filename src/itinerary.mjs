@@ -1,6 +1,7 @@
 import { nextDate } from './day-agenda.mjs';
 import { eventLocation } from './event-location.mjs';
 import { itineraryMemory as memory } from './city-plan-state.mjs';
+import { validTerritory } from './territory.mjs';
 
 export function itineraryStop(item, type) {
   const title = item.title || item.name;
@@ -13,7 +14,8 @@ export function itineraryStop(item, type) {
   const location = eventLocation(item.location?.latitude ?? item.latitude, item.location?.longitude ?? item.longitude);
   return { id: JSON.stringify([type, url.href, start]), type, title, url: url.href,
     names: item.names || {}, venue: item.venue || null, start, end, duration: null,
-    hours: type === 'place' && typeof item.hours === 'string' ? item.hours : null, ...(location && { location }) };
+    hours: type === 'place' && typeof item.hours === 'string' ? item.hours : null, ...(location && { location }),
+    ...(type === 'place' && validTerritory(item.territory) && { territory: item.territory }) };
 }
 
 export function itineraryStore(cityId, storage) {
@@ -70,7 +72,7 @@ export function itineraryStore(cityId, storage) {
     add(day, stop) {
       return change(day, stops => stops.some(s => s.id === stop.id)
         ? stops.map(existing => existing.id === stop.id ? { ...existing,
-          ...(stop.location && { location: stop.location }), hours: stop.hours } : existing)
+          ...(stop.location && { location: stop.location }), ...(stop.territory && { territory: stop.territory }), hours: stop.hours } : existing)
         : [...stops, stop]);
     },
     remove(day, id) { return change(day, stops => stops.filter(stop => stop.id !== id)); },

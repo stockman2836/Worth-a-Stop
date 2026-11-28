@@ -5,9 +5,14 @@ import { once } from 'node:events';
 
 test('place API separates city identities and local searches, validates scope and reports missing boundaries', async t => {
   const script = `
+    let starts = 0, cancellations = 0;
     globalThis.fetch = async (url, options) => {
       if (url.hostname === 'geocoding-api.open-meteo.com') return Response.json({id:42,name:'Missing city',feature_code:'PPL'});
       const query = url.searchParams.get('data') ?? new URLSearchParams(options.body).get('data');
+      if (query.includes('is_in(52,14)')) return new Promise((resolve, reject) => {
+        console.log('SOURCE_STARTED', ++starts);
+        options.signal.addEventListener('abort', () => { console.log('SOURCE_CANCELLED', ++cancellations); reject(options.signal.reason); }, { once: true });
+      });
       if (query.includes('is_in(51,14)')) return new Response(null, {status:503});
       let elements;
       if (query.includes('is_in')) {
@@ -26,6 +31,8 @@ test('place API separates city identities and local searches, validates scope an
   const child = spawn(process.execPath, ['--input-type=module', '--eval', script], {
     cwd: new URL('../', import.meta.url), env: { ...process.env, PORT: '0', PLACE_CACHE_DIR: 'off' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   });
+  const notices = [];
+  child.stdout.on('data', bytes => notices.push(String(bytes)));
   t.after(async () => { child.kill(); if (child.exitCode === null && child.signalCode === null) await once(child, 'exit'); });
   const address = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(Error('Server did not start')), 5000);
@@ -46,12 +53,35 @@ test('place API separates city identities and local searches, validates scope an
   assert.equal(other.places[0].name, 'Other landmark');
   const nearby = await (await request({ scope: 'nearby' })).json();
   assert.ok(Array.isArray(nearby) && nearby[0].km < 2);
-  assert.equal((await request({ scope: 'city', id: 44, name: 'Missing city' })).status, 422);
+  const unsupported = await request({ scope: 'city', id: 44, name: 'Missing city' });
+  assert.equal(unsupported.status, 200);
+  assert.equal((await unsupported.json()).status, 'unsupported');
   for (const params of [{ scope: 'city' }, { scope: 'world' }, { radius: 6 }, { scope: 'city', id: -1, name: 'Town' }]) {
     assert.equal((await request(params)).status, 400);
   }
+  async function notice(text) {
+    for (let i = 0; i < 100; i++) {
+      if (notices.join('').includes(text)) return;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    assert.fail('Missing server notice: ' + text);
+  }
+  for (let i = 1; i <= 6; i++) {
+    const controller = new AbortController();
+    const pending = fetch(address + '/api/places?' + new URLSearchParams({ lat: 52, lon: 14, scope: 'city', id: 100 + i, name: 'Town' }), { signal: controller.signal });
+    await notice('SOURCE_STARTED ' + i);
+    controller.abort();
+    await assert.rejects(pending, { name: 'AbortError' });
+    await notice('SOURCE_CANCELLED ' + i);
+  }
+  const nextCity = await request({ lat: 53, scope: 'city', id: 999, name: 'Town' });
+  assert.equal(nextCity.status, 200);
+  assert.equal((await nextCity.json()).places.length, 1);
   const outage = await request({ lat: 51, scope: 'city', id: 99, name: 'Town' });
-  assert.equal(outage.status, 503);
-  assert.equal(outage.headers.get('retry-after'), '60');
-  assert.equal((await outage.json()).code, 'PLACE_SOURCE_UNAVAILABLE');
+  assert.equal(outage.status, 200);
+  assert(Number(outage.headers.get('retry-after')) > 0);
+  const failure = await outage.json();
+  assert.equal(failure.status, 'unavailable');
+  assert.equal(failure.code, 'PLACE_SOURCE_UNAVAILABLE');
+  assert.equal(failure.places, undefined);
 });

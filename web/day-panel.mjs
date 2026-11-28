@@ -6,7 +6,7 @@ const copy = {
     today: 'Сегодня', tomorrow: 'Завтра', date: 'Дата поездки', loading: 'Ищем события…',
     empty: 'В проверенных афишах нет событий на этот день', partial: 'Показаны результаты из доступной части афиш',
     official: 'Городская афиша', waiting: 'Проверяем остальные источники…',
-    sources: 'Проверенные городские афиши', noSources: 'Городские афиши пока не найдены',
+    sources: 'Проверенные городские афиши', noSources: 'Городские афиши пока не найдены', sourceUnavailable: 'Городские источники временно недоступны',
     sourceEmpty: 'Публикаций с датами не найдено', sourceFailed: 'Часть страниц недоступна',
     sourceLimited: 'Проверена часть страниц', sourceRead: 'Даты прочитаны',
     sourceCount: (pages, events) => `Страниц проверено: ${pages}, публикаций с датами: ${events}`,
@@ -21,7 +21,7 @@ const copy = {
     today: 'Today', tomorrow: 'Tomorrow', date: 'Trip date', loading: 'Looking up events…',
     empty: 'No events found for this day in the listings checked', partial: 'Only part of the listings could be checked',
     official: 'City calendar', waiting: 'Checking the remaining sources…',
-    sources: 'City calendars checked', noSources: 'No city calendars discovered yet',
+    sources: 'City calendars checked', noSources: 'No city calendars discovered yet', sourceUnavailable: 'City sources are temporarily unavailable',
     sourceEmpty: 'No dated listings found', sourceFailed: 'Some pages were unavailable',
     sourceLimited: 'Only part of the pages checked', sourceRead: 'Published dates read',
     sourceCount: (pages, events) => `Pages checked: ${pages}, dated listings: ${events}`,
@@ -150,7 +150,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
       const official = results.find(r => Array.isArray(r.sources));
       if (official) {
         coverage.hidden = false;
-        coverageTitle.textContent = official.sources.length ? text.sources : text.noSources;
+        coverageTitle.textContent = official.unavailable ? text.sourceUnavailable : official.sources.length ? text.sources : text.noSources;
         coverageList.replaceChildren();
         for (const source of official.sources) {
           const item = document.createElement('li');
@@ -165,7 +165,7 @@ export function dayPanel(city, language, initialDate, searchSignal, eventMap) {
           coverageList.append(item);
         }
       }
-      message.textContent = [events.length ? text.count(events.length) : finished === 2 && results.length && text.empty,
+      message.textContent = [events.length ? text.count(events.length) : finished === 2 && results.length && !incomplete && text.empty,
         finished < 2 && text.waiting, !results.length && finished === 2 ? text.error : incomplete && text.partial,
         area && 'OpenAgenda · ' + text.area(area), zone].filter(Boolean).join(' · ');
       const visibleCount = Math.max(20, list.childElementCount);

@@ -37,11 +37,17 @@ export async function cityBoundary(city, options = {}) {
   // Resolve the existing GeoNames identity to its English name, never guess a translation.
   if (!matches.length) {
     const timeout = AbortSignal.timeout(10000);
-    const response = await (options.fetchResponse ?? fetch)(new URL(`https://geocoding-api.open-meteo.com/v1/get?id=${id}&language=en`), {
-      signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
-    });
-    if (!response.ok) throw Error('City identity lookup unavailable');
-    const canonical = await response.json();
+    let canonical;
+    try {
+      const response = await (options.fetchResponse ?? fetch)(new URL(`https://geocoding-api.open-meteo.com/v1/get?id=${id}&language=en`), {
+        signal: options.signal ? AbortSignal.any([options.signal, timeout]) : timeout,
+      });
+      if (!response.ok) throw Error('City identity lookup unavailable');
+      canonical = await response.json();
+    } catch (cause) {
+      options.signal?.throwIfAborted();
+      throw Object.assign(Error('City identity lookup unavailable', { cause }), { code: 'PLACE_SOURCE_UNAVAILABLE' });
+    }
     options.signal?.throwIfAborted();
     if (canonical?.id === id && canonical.feature_code?.startsWith('PPL') && typeof canonical.name === 'string' && canonical.name.trim()) {
       matches = candidates([canonical.name]);

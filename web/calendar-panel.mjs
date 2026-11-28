@@ -62,6 +62,7 @@ export function calendarsPanel(city, open, language, text, storage, initialDate,
       const response = await fetch('/api/official-calendars/' + city.id + (force ? '?refresh=1' : ''), { signal, cache: force ? 'reload' : 'default' });
       if (!response.ok) throw Error();
       const links = await response.json();
+      if (!Array.isArray(links)) throw Error('Calendar discovery unavailable');
       official.textContent = links.length ? '' : text.officialEmpty;
       for (const url of links) {
         const link = document.createElement('a');

@@ -3,6 +3,7 @@ import { lookup } from 'node:dns/promises';
 import ipaddr from 'ipaddr.js';
 import { load } from 'cheerio';
 import { cityWebsites } from './city-websites.mjs';
+import { createSourceCache } from './source-cache.mjs';
 
 function website(value) {
   if (!URL.canParse(value)) return null;
@@ -177,14 +178,9 @@ async function discoverCalendars(id, { fetchJSON = json, readPage = page } = {})
   return links;
 }
 
-const cache = new Map();
+const cachedCalendars = createSourceCache();
 export async function officialCalendars(id, dependencies) {
   if (!/^[1-9]\d{0,9}$/.test(id)) throw Error('Invalid GeoNames ID');
-  if (dependencies) return discoverCalendars(id, dependencies);
-  const saved = cache.get(id);
-  if (saved?.expires > Date.now()) return saved.promise;
-  const promise = discoverCalendars(id);
-  if (cache.size >= 80) cache.delete(cache.keys().next().value);
-  cache.set(id, { promise, expires: Date.now() + 600000 });
-  try { return await promise; } catch (error) { if (cache.get(id)?.promise === promise) cache.delete(id); throw error; }
+  if (dependencies && Object.keys(dependencies).length) return discoverCalendars(id, dependencies);
+  return cachedCalendars(id, () => discoverCalendars(id), { refresh: Boolean(dependencies) });
 }

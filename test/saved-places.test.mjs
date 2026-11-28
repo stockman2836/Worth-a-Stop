@@ -59,8 +59,10 @@ test('city and local searches use separate versioned cache entries and the corre
 test('accepts thousands of city places and leaves capped shortlist caches unused', async () => {
   const saved = storage();
   saved.setItem(`worth-a-stop.places.v5.city.${city.id}.${city.latitude}.${city.longitude}`, JSON.stringify({ places: [place], boundary, checkedAt: Date.now() }));
-  saved.setItem(`worth-a-stop.places.v6.city.${city.id}.${city.latitude}.${city.longitude}`, JSON.stringify({ places: [place], boundary, checkedAt: Date.now() }));
   await assert.rejects(loadPlaces(city, { storage: saved, fetchResponse: unavailable }));
+  saved.setItem(`worth-a-stop.places.v6.city.${city.id}.${city.latitude}.${city.longitude}`, JSON.stringify({ places: [place], boundary, checkedAt: Date.now() }));
+  const older = await loadPlaces(city, { storage: saved, fetchResponse: unavailable });
+  assert.equal(older.stale, true); assert.equal(older.incomplete, true);
   const places = Array.from({ length: 3000 }, (_,index) => ({ ...place, name: 'Place ' + index, url: 'https://www.openstreetmap.org/node/' + index }));
   assert.equal((await loadPlaces(city, { storage: saved, fetchResponse: async () => Response.json({ places, boundary }) })).places.length, 3000);
   await assert.rejects(loadPlaces(city, { scope: 'nearby', fetchResponse: async () => Response.json(places) }), /Invalid places/);
@@ -95,4 +97,32 @@ test('a partial refresh cannot overwrite the last complete city catalogue', asyn
   assert.equal(result.stale, true);
   const offline = await loadPlaces(city, { storage: saved, fetchResponse: unavailable });
   assert.equal(offline.incomplete, undefined);
+});
+
+test('unavailable states respect cooldown across workspace recreations and recover afterwards', async () => {
+  let calls = 0;
+  const fetchResponse = async () => {
+    calls++;
+    return calls === 1 ? Response.json({ status: 'unavailable', code: 'PLACE_SOURCE_UNAVAILABLE', retryAt: Date.now() + 200 }) : cityResponse();
+  };
+  for (let i = 0; i < 10; i++) {
+    await assert.rejects(loadPlaces({ ...city, name: 'Translation ' + i }, { fetchResponse }), { code: 'PLACE_SOURCE_UNAVAILABLE' });
+  }
+  assert.equal(calls, 1);
+  await new Promise(resolve => setTimeout(resolve, 230));
+  assert.equal((await loadPlaces(city, { fetchResponse })).places.length, 1);
+  assert.equal(calls, 2);
+});
+
+test('legacy loading flags cannot restart polling after an unavailable response', async () => {
+  const saved = storage();
+  saved.setItem(`worth-a-stop.places.v6.city.${city.id}.${city.latitude}.${city.longitude}`,
+    JSON.stringify({ places: [place], boundary, checkedAt: 1000, loading: true }));
+  let calls = 0;
+  const fetchResponse = async () => { calls++; return Response.json({ status: 'unavailable', retryAt: Date.now() + 60000 }); };
+  const first = await loadPlaces(city, { storage: saved, fetchResponse });
+  const second = await loadPlaces(city, { storage: saved, fetchResponse });
+  assert.equal(first.loading, undefined); assert.equal(second.loading, undefined);
+  assert.equal(first.checkedAt, 1000); assert.equal(first.stale, true);
+  assert.equal(first.incomplete, true); assert.equal(calls, 1);
 });

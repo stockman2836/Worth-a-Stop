@@ -93,15 +93,28 @@ const server = createServer(async (request, response) => {
       response.writeHead(400).end();
       return;
     }
+    const controller = new AbortController();
+    response.once('close', () => { if (!response.writableEnded) controller.abort(); });
     try {
-      const places = await searchPlaces({ latitude, longitude, id, name }, { scope });
+      const places = await searchPlaces({ latitude, longitude, id, name }, { scope, signal: controller.signal });
       response.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': places.incomplete ? 'no-store' : 'private, max-age=3600' }).end(JSON.stringify(places));
     } catch (error) {
+      if (controller.signal.aborted || response.destroyed) return;
       const boundaryMissing = error.code === 'CITY_BOUNDARY_UNAVAILABLE';
-      response.writeHead(boundaryMissing ? 422 : 503, {
-        'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...(!boundaryMissing && { 'Retry-After': '60' }),
-      }).end(JSON.stringify({ code: boundaryMissing ? error.code : 'PLACE_SOURCE_UNAVAILABLE' }));
+      const expected = boundaryMissing || ['PLACE_SOURCE_UNAVAILABLE', 'PLACE_QUERY_TOO_LARGE'].includes(error.code) ||
+        ['AbortError', 'TimeoutError'].includes(error.name);
+      if (!expected) {
+        console.error('Place discovery failed:', error);
+        response.writeHead(500, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ code: 'INTERNAL_ERROR' }));
+        return;
+      }
+      const retryAt = error.retryAt ?? Date.now() + (boundaryMissing ? 300000 : 60000);
+      response.writeHead(200, {
+        'Content-Type': 'application/json', 'Cache-Control': 'no-store',
+        'Retry-After': String(Math.max(1, Math.ceil((retryAt - Date.now()) / 1000))),
+      }).end(JSON.stringify({ status: boundaryMissing ? 'unsupported' : 'unavailable', retryAt,
+        code: boundaryMissing ? error.code : 'PLACE_SOURCE_UNAVAILABLE' }));
     }
     return;
   }
@@ -114,8 +127,12 @@ const server = createServer(async (request, response) => {
       if (day !== undefined && !validCalendarDay(day)) { response.writeHead(400).end('Invalid calendar date'); return; }
       const data = lookup[1] === 'events' ? await officialEvents(lookup[2], { refresh, day }) : await officialCalendars(lookup[2], refresh ? {} : undefined);
       response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'private, max-age=600' }).end(JSON.stringify(data));
-    } catch {
-      response.writeHead(502).end();
+    } catch (error) {
+      const retryAt = error.retryAt ?? Date.now() + 60000;
+      response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store',
+        'Retry-After': String(Math.max(1, Math.ceil((retryAt - Date.now()) / 1000))),
+      }).end(JSON.stringify({ status: 'unavailable', code: 'OFFICIAL_SOURCE_UNAVAILABLE', retryAt,
+        ...(lookup[1] === 'events' && { events: [], sources: [], incomplete: true, unavailable: true }) }));
     }
     return;
   }

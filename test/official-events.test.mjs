@@ -1,9 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { publishedEvents, collectCalendar } from '../src/official-events.mjs';
+import { publishedEvents, collectCalendar, createOfficialEventSearch } from '../src/official-events.mjs';
+import { createSourceCache } from '../src/source-cache.mjs';
 import { officialOnDay, mergeListings } from '../src/day-agenda.mjs';
 
 const url = new URL('https://city.example/events/fair');
+
+test('changing event dates or refreshing cannot repeatedly restart failed calendar discovery', async () => {
+  let time = 1000, calls = 0, offline = true;
+  const cache = createSourceCache({ now: () => time });
+  const search = createOfficialEventSearch({ now: () => time, findCalendars: (id, refresh) => cache(id, async () => {
+    calls++; if (offline) throw Error('offline'); return [];
+  }, { refresh: Boolean(refresh) }) });
+  await assert.rejects(search('42', { day: '2026-11-28' }));
+  await assert.rejects(search('42', { day: '2026-11-29', refresh: true }));
+  await assert.rejects(search('42', { day: '2026-11-30', refresh: true }));
+  assert.equal(calls, 1);
+  time += 60001; offline = false;
+  const result = await search('42', { day: '2026-11-30' });
+  assert.equal(calls, 2); assert.equal(result.incomplete, true);
+});
 test('individual performances inherit their venue and exclude gaps and cancellations', () => {
   const event = { '@type': 'MusicEvent', name: 'Choir', location: { name: 'Hall' }, subEvent: [
     { '@type': 'Event', startDate: '2026-11-28T15:30:00+01:00' },

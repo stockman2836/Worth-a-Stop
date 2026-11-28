@@ -223,14 +223,25 @@ export function placesPanel(city, language, signal, open, selection) {
   cancelPick.addEventListener('click', cancelStartSelection);
   pickerBox.append(pickHint, cancelPick);
   details.append(summary, controls, slider, filterLabel, filterMessage, status, retry, mapControls, mapBox, pickerBox, legend, listView.filters, listView.empty, list, listView.pagination, credit);
-  let refreshTimer, renderedAt;
-  signal.addEventListener('abort', () => clearTimeout(refreshTimer), { once: true });
+  let refreshTimer, retryTimer, renderedAt, busy = false;
+  signal.addEventListener('abort', () => { clearTimeout(refreshTimer); clearTimeout(retryTimer); }, { once: true });
+  function unlockRetry(retryAt) {
+    clearTimeout(retryTimer);
+    const seconds = Math.max(0, Math.ceil(((retryAt || 0) - Date.now()) / 1000));
+    retry.disabled = seconds > 0;
+    retry.textContent = seconds ? (language === 'ru' ? `Повторить через ${seconds} с` : `Try again in ${seconds}s`) : text.retry;
+    if (seconds) retryTimer = setTimeout(() => unlockRetry(retryAt), 1000);
+  }
   async function load() {
+    if (busy || signal.aborted) return;
+    busy = true;
     clearTimeout(refreshTimer);
+    clearTimeout(retryTimer);
+    retry.disabled = true;
     retry.hidden = true;
     if (!loadedPlaces.length) status.textContent = text.loading;
     try {
-      const { places, boundary, stale, checkedAt, incomplete, loading } = await loadPlaces(city, { signal, storage });
+      const { places, boundary, stale, checkedAt, incomplete, loading, retryAt } = await loadPlaces(city, { signal, storage });
       if (signal.aborted) return;
       if (loading) refreshTimer = setTimeout(load, 2000);
       if (loading && renderedAt === checkedAt) return;
@@ -261,12 +272,14 @@ export function placesPanel(city, language, signal, open, selection) {
       boundaryLink.textContent = `${text.boundary}: ${boundary.name}`;
       status.append(' · ', boundaryLink);
       retry.hidden = loading || !stale && !incomplete;
+      if (!retry.hidden) unlockRetry(retryAt);
     } catch (error) {
       if (signal.aborted) return;
       status.textContent = error.code === 'CITY_BOUNDARY_UNAVAILABLE' ? text.boundaryError :
         error.code === 'PLACE_SOURCE_UNAVAILABLE' ? text.sourceError : text.error;
-      retry.hidden = false;
-    }
+      retry.hidden = error.code === 'CITY_BOUNDARY_UNAVAILABLE';
+      if (!retry.hidden) unlockRetry(error.retryAt);
+    } finally { busy = false; }
   }
   details.addEventListener('toggle', () => {
     if (details.open) { ensureMap(); if (!status.textContent) load(); }

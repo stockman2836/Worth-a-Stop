@@ -4,6 +4,7 @@ import { eventLocation } from './event-location.mjs';
 import { readNuxtData } from './embedded-data.mjs';
 import { microdataEvents, calendarCardEvents, calendarRowEvents } from './html-events.mjs';
 import { calendarBase, calendarDateLinks, validCalendarDay } from './calendar-navigation.mjs';
+import { createSourceCache } from './source-cache.mjs';
 
 function embeddedEvents($, base) {
   const links = $('a[href]').toArray().map(anchor => linkedPage($(anchor).attr('href'), base)).filter(Boolean);
@@ -193,25 +194,20 @@ export async function collectCalendar(calendar, { readPage = page, maxPages = 24
       ...(day && { requestedDate: day }), ...(dateSearchUrl && { dateSearchUrl }) } };
 }
 
-export function createOfficialEventSearch({ findCalendars = officialCalendars, readPage = page } = {}) {
-  const cache = new Map();
+export function createOfficialEventSearch({ findCalendars = officialCalendars, readPage = page, now = Date.now } = {}) {
+  const cachedEvents = createSourceCache({ now, limit: 40 });
   return async function search(id, { refresh = false, day } = {}) {
     if (!/^[1-9]\d{0,9}$/.test(id)) throw Error('Invalid GeoNames ID');
     if (day !== undefined && !validCalendarDay(day)) throw Error('Invalid calendar date');
     const key = `${id}/${day || 'all'}`;
-    const saved = cache.get(key);
-    if (!refresh && saved?.expires > Date.now()) return saved.promise;
-    const promise = (async () => {
+    return cachedEvents(key, async () => {
       const calendars = await findCalendars(id, refresh ? {} : undefined);
       const results = await Promise.allSettled(calendars.map(calendar => collectCalendar(calendar, { day, readPage })));
       return { events: results.flatMap(r => r.status === 'fulfilled' ? r.value.events : []),
         sources: results.map((r, index) => r.status === 'fulfilled' ? r.value.source :
           { url: calendars[index], pagesRead: 0, failedPages: 1, eventsFound: 0, limited: false, ...(day && { requestedDate: day }) }),
         incomplete: !calendars.length || results.some(r => r.status === 'rejected' || r.value.incomplete) };
-    })();
-    if (cache.size >= 40) cache.delete(cache.keys().next().value);
-    cache.set(key, { expires: Date.now() + 600000, promise });
-    try { return await promise; } catch (error) { if (cache.get(key)?.promise === promise) cache.delete(key); throw error; }
+    }, { refresh });
   };
 }
 

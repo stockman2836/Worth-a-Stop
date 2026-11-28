@@ -3,6 +3,12 @@ import assert from 'node:assert/strict';
 import { cityBoundary } from '../src/city-boundary.mjs';
 
 const city = { id: 42, name: 'Town', latitude: 50, longitude: 14 };
+
+test('a failed canonical lookup is a source outage, not an unsupported city', async () => {
+  await assert.rejects(cityBoundary(city, { fetchResponse: async url =>
+    url.hostname === 'geocoding-api.open-meteo.com' ? new Response(null, { status: 503 }) : Response.json({ elements: [] }) }),
+  { code: 'PLACE_SOURCE_UNAVAILABLE' });
+});
 const relation = (id, tags) => ({ type: 'relation', id, tags: { name: 'Town', boundary: 'administrative', admin_level: '8', ...tags } });
 const lookup = (elements, place = city) => cityBoundary(place, { fetchResponse: async url => {
   if (url.hostname === 'geocoding-api.open-meteo.com') return Response.json({ id: place.id, name: place.name, feature_code: 'PPL' });

@@ -12,36 +12,61 @@ function validBoundary(boundary) {
     /^https:\/\/www\.openstreetmap\.org\/relation\/[1-9]\d*$/.test(boundary.url);
 }
 
+const failures = new WeakMap();
+
 export async function loadPlaces(city, { signal, fetchResponse = fetch, storage, scope = 'city' } = {}) {
+  signal?.throwIfAborted();
   if (!['city', 'nearby'].includes(scope)) throw Error('Invalid place search scope');
   const limit = scope === 'city' ? Infinity : 12;
   const key = `worth-a-stop.places.v7.${scope}.${scope === 'city' ? city.id + '.' : ''}${city.latitude}.${city.longitude}`;
   const validResult = result => validPlaces(result?.places, limit) && (scope !== 'city' || validBoundary(result.boundary));
   let saved;
   try {
-    const data = JSON.parse(storage?.getItem(key) ?? 'null');
-    if (validResult(data) && Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now()) saved = data;
+    let data = JSON.parse(storage?.getItem(key) ?? 'null');
+    if (!validResult(data)) {
+      const older = JSON.parse(storage?.getItem(key.replace('.v7.', '.v6.')) ?? 'null');
+      if (validResult(older)) data = { ...older, incomplete: true };
+    }
+    if (validResult(data) && Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now()) {
+      const { loading, ...record } = data;
+      saved = record;
+    }
   } catch { /* Storage is optional. */ }
+  if (!failures.has(fetchResponse)) failures.set(fetchResponse, new Map());
+  const cooldown = failures.get(fetchResponse);
   try {
+    const blocked = cooldown.get(key);
+    if (blocked?.retryAt > Date.now()) throw blocked;
     const query = new URLSearchParams({ lat: city.latitude, lon: city.longitude, scope, v: '9' });
     if (scope === 'city') { query.set('id', city.id); query.set('name', city.name); }
     const response = await fetchResponse('/api/places?' + query, { signal });
-    if (response.status === 422) throw Object.assign(Error('City boundary unavailable'), { code: 'CITY_BOUNDARY_UNAVAILABLE' });
-    if (response.status === 503) throw Object.assign(Error('Place sources temporarily unavailable'), { code: 'PLACE_SOURCE_UNAVAILABLE' });
+    const payload = await response.json().catch(() => undefined);
+    if (response.status === 422 || payload?.status === 'unsupported' || response.status === 503 || payload?.status === 'unavailable') {
+      const boundaryMissing = response.status === 422 || payload?.status === 'unsupported';
+      const seconds = Number(response.headers.get('Retry-After'));
+      const delay = seconds > 0 && seconds <= 300 ? seconds * 1000 : boundaryMissing ? 300000 : 60000;
+      const retryAt = Number.isFinite(payload?.retryAt) && payload.retryAt > Date.now() && payload.retryAt <= Date.now() + 300000 ? payload.retryAt : Date.now() + delay;
+      throw Object.assign(Error(boundaryMissing ? 'City boundary unavailable' : 'Place sources temporarily unavailable'), {
+        code: boundaryMissing ? 'CITY_BOUNDARY_UNAVAILABLE' : 'PLACE_SOURCE_UNAVAILABLE', retryAt,
+      });
+    }
     if (!response.ok) throw Error('Places unavailable');
-    const payload = await response.json();
     const data = scope === 'city' ? payload : { places: payload };
     if (!validResult(data)) throw Error('Invalid places response');
     signal?.throwIfAborted();
-    if (data.incomplete && saved && !saved.incomplete) return { ...saved, stale: true, incomplete: true, loading: Boolean(data.loading) };
+    cooldown.delete(key);
+    if (data.incomplete && saved && !saved.incomplete) return { ...saved, stale: true, incomplete: true, loading: Boolean(data.loading), retryAt: data.retryAt };
     const result = { places: data.places, ...(scope === 'city' && { boundary: data.boundary }),
-      ...(data.incomplete && { incomplete: true }),
+      ...(data.incomplete && { incomplete: true }), ...(Number.isFinite(data.retryAt) && { retryAt: data.retryAt }),
       checkedAt: Number.isFinite(data.checkedAt) && data.checkedAt >= 0 && data.checkedAt <= Date.now() ? data.checkedAt : Date.now() };
     try { storage?.setItem(key, JSON.stringify(result)); } catch { /* Live results remain usable. */ }
-    return { ...result, stale: false, ...(data.loading && { loading: true }) };
+    return { ...result, stale: Boolean(data.stale), ...(data.loading && { loading: true }) };
   } catch (error) {
     signal?.throwIfAborted();
-    if (saved) return { ...saved, stale: true };
+    error.retryAt ??= Date.now() + 10000;
+    if (cooldown.size >= 100) cooldown.delete(cooldown.keys().next().value);
+    cooldown.set(key, error);
+    if (saved) return { ...saved, stale: true, retryAt: error.retryAt };
     throw error;
   }
 }

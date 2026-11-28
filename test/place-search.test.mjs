@@ -26,6 +26,7 @@ test('keeps a confirmed boundary after place lookup failure and starts TTL after
     },
   });
   await assert.rejects(search(city, { scope: 'city' }));
+  time += 60001;
   assert.equal((await search(city, { scope: 'city' })).relation, 1);
   assert.equal(boundaries, 1);
   time += 3599999;
@@ -37,14 +38,17 @@ test('keeps a confirmed boundary after place lookup failure and starts TTL after
   assert.equal(boundaries, 1);
 });
 
-test('does not reuse a boundary from another city or cache a failed boundary lookup', async () => {
-  let calls = 0;
-  const search = createPlaceSearch({ discoverBoundary: async city => {
+test('does not reuse another city boundary and retries a failed lookup after cooldown', async () => {
+  let calls = 0, time = 1000;
+  const search = createPlaceSearch({ now: () => time, discoverBoundary: async city => {
     calls++;
     if (calls === 1) throw Error('offline');
     return city.id;
   }, discoverPlaces: async (_city, { resolveBoundary }) => resolveBoundary() });
   await assert.rejects(search(city, { scope: 'city' }));
+  await assert.rejects(search(city, { scope: 'city' }));
+  assert.equal(calls, 1);
+  time += 60001;
   assert.equal(await search(city, { scope: 'city' }), 42);
   assert.equal(await search({ ...city, id: 43 }, { scope: 'city' }), 43);
   assert.equal(calls, 3);

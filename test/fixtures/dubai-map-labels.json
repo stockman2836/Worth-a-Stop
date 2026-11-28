@@ -1,0 +1,26 @@
+{
+  "source": "https://tiles.openfreemap.org/planet",
+  "checkedOn": "2026-11-28",
+  "features": [
+    {
+      "layer": "park",
+      "name": "محمية رأس الخور للحياة البرية",
+      "name:en": "Ras Al Khor Wildlife Sanctuary",
+      "name:latin": "Ras Al Khor Wildlife Sanctuary",
+      "name_en": "Ras Al Khor Wildlife Sanctuary"
+    },
+    {
+      "layer": "park",
+      "name": "موقع جميرا الأثري",
+      "name:latin": "Jumeirah Archaeological Site",
+      "name_en": "Jumeirah Archaeological Site"
+    },
+    {
+      "layer": "transportation_name",
+      "name": "مخرج 47 شمال",
+      "name:en": "Exit 47 North",
+      "name:latin": "Exit 47 North",
+      "name_en": "Exit 47 North"
+    }
+  ]
+}

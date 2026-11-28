@@ -2,9 +2,10 @@ import { iconLabel } from './icons.mjs';
 import { placeGroup, placeSymbols } from './map-symbols.mjs';
 import { territoryLabel } from './territory.mjs';
 import { referenceLink } from './place-reference-view.mjs';
-import { placeName } from './place-name.mjs';
+import { placeName, placeTranslationRequest, machinePlaceName } from './place-name.mjs';
+import { translateNames } from './name-translations.mjs';
 
-export function placeList(language, text, getItinerary, onShow, initialPage, allPlaces = false) {
+export function placeList(language, text, getItinerary, onShow, initialPage, allPlaces = false, signal) {
   const element = document.createElement('ul'); element.className = 'places';
   const filters = document.createElement('div'); filters.className = 'place-list-filters'; filters.setAttribute('role', 'group'); filters.setAttribute('aria-label', text.placeSelection);
   const filterCaption = document.createElement('span'); filterCaption.textContent = text.placeSelection;
@@ -22,7 +23,36 @@ export function placeList(language, text, getItinerary, onShow, initialPage, all
   let showAll = Boolean(allPlaces), onlyAvailable = false;
   let restored = Number.isSafeInteger(initialPage) && initialPage >= 0 ? initialPage : undefined;
   const size = 40;
+  const pendingNames = new Map();
+  let nameTimer, translating = false;
+  const nameObserver = typeof IntersectionObserver === 'undefined' ? undefined : new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      nameObserver.unobserve(entry.target);
+      const place = places[Number(entry.target.parentElement.dataset.placeIndex)];
+      const item = placeTranslationRequest(place, language);
+      if (item && !machinePlaceName(place, language)) pendingNames.set(item.text, item);
+    }
+    clearTimeout(nameTimer); nameTimer = setTimeout(translateVisible, 250);
+  });
+  async function translateVisible() {
+    if (signal?.aborted || translating || !pendingNames.size) return;
+    const batch = [...pendingNames.values()].slice(0, 4);
+    for (const item of batch) pendingNames.delete(item.text);
+    translating = true;
+    try { await translateNames(batch, language, { signal }); if (!signal?.aborted) refreshNames(); }
+    finally { translating = false; if (pendingNames.size && !signal?.aborted) nameTimer = setTimeout(translateVisible, 250); }
+  }
+  function refreshNames() {
+    for (const button of element.querySelectorAll('.show-place')) {
+      const place = places[Number(button.parentElement.dataset.placeIndex)];
+      button.textContent = placeName(place, language);
+      button.title = machinePlaceName(place, language) ? `${place.name}\n${language === 'ru' ? 'Машинный перевод' : 'Machine translation'} · MyMemory` : '';
+    }
+  }
+  signal?.addEventListener('abort', () => { nameObserver?.disconnect(); pendingNames.clear(); clearTimeout(nameTimer); }, { once: true });
   function render() {
+    nameObserver?.disconnect(); pendingNames.clear();
     element.replaceChildren();
     const start = page * size;
     for (const index of eligible.slice(start, start + size)) {
@@ -30,6 +60,7 @@ export function placeList(language, text, getItinerary, onShow, initialPage, all
       item.classList.toggle('selected', index === selected);
       const show = document.createElement('button'); show.type = 'button'; show.className = 'show-place';
       show.textContent = placeName(place, language); show.setAttribute('aria-pressed', String(index === selected));
+      if (!signal?.aborted) nameObserver?.observe(show);
       show.addEventListener('click', () => onShow(index));
       const link = document.createElement('a'); link.href = place.url; link.textContent = text.source;
       const info = document.createElement('span'); info.className = 'event-venue';
@@ -60,6 +91,7 @@ export function placeList(language, text, getItinerary, onShow, initialPage, all
     highlights.setAttribute('aria-pressed', String(!showAll)); all.setAttribute('aria-pressed', String(showAll));
     empty.hidden = !places.length || showAll || eligible.length > 0;
     empty.textContent = onlyAvailable ? text.noOpenHighlights : text.noHighlights;
+    refreshNames();
   }
   function applyFilter() {
     eligible = places.flatMap((place, index) => (showAll || place.prominence === 'highlight') && (!onlyAvailable || states[index]?.state === 'open') ? [index] : []);
@@ -69,7 +101,7 @@ export function placeList(language, text, getItinerary, onShow, initialPage, all
   all.addEventListener('click', () => { showAll = true; page = 0; applyFilter(); });
   previous.addEventListener('click', () => { page--; render(); element.scrollIntoView({ block: 'start' }); });
   next.addEventListener('click', () => { page++; render(); element.scrollIntoView({ block: 'start' }); });
-  return { element, pagination, filters, empty,
+  return { element, pagination, filters, empty, refreshNames,
     getPage: () => page,
     showsAll: () => showAll,
     update(items, value, availableOnly) {

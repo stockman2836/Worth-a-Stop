@@ -7,6 +7,7 @@ test('place API separates city identities and local searches, validates scope an
   const script = `
     let starts = 0, cancellations = 0;
     globalThis.fetch = async (url, options) => {
+      if (url.hostname === 'api.mymemory.translated.net') return Response.json({ responseStatus: 200, responseData: { translatedText: 'Translated name' } });
       if (url.hostname === 'geocoding-api.open-meteo.com') return Response.json({id:42,name:'Missing city',feature_code:'PPL'});
       const query = url.searchParams.get('data') ?? new URLSearchParams(options.body).get('data');
       if (query.includes('is_in(52,14)')) return new Promise((resolve, reject) => {
@@ -29,7 +30,7 @@ test('place API separates city identities and local searches, validates scope an
     await import('./bin/site.mjs');
   `;
   const child = spawn(process.execPath, ['--input-type=module', '--eval', script], {
-    cwd: new URL('../', import.meta.url), env: { ...process.env, PORT: '0', PLACE_CACHE_DIR: 'off' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    cwd: new URL('../', import.meta.url), env: { ...process.env, PORT: process.env.BROWSER_TEST_PORT || '0', PLACE_CACHE_DIR: 'off' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   });
   const notices = [];
   child.stdout.on('data', bytes => notices.push(String(bytes)));
@@ -43,6 +44,13 @@ test('place API separates city identities and local searches, validates scope an
     });
   });
   const request = params => fetch(address + '/api/places?' + new URLSearchParams({ lat: 50, lon: 14, ...params }));
+  const translate = body => fetch(address + '/api/name-translations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const item = { source: 'en', text: 'Landmark' };
+  assert.deepEqual((await (await translate({ target: 'ru', items: [item] })).json()).translations, [{ ...item, translation: 'Translated name' }]);
+  for (const body of [{ target: 'unknown', items: [item] }, { target: 'ru', items: Array(5).fill(item) },
+    { target: 'ru', items: [{ source: 'ar', text: 'Place' }] }, { target: 'ru', items: [{ source: 'en', text: 'x'.repeat(5000) }] }]) {
+    assert.equal((await translate(body)).status, 400);
+  }
   const city = await (await request({ scope: 'city', id: 42, name: 'Town' })).json();
   assert.equal(city.boundary.url, 'https://www.openstreetmap.org/relation/10');
   assert.ok(city.places[0].km > 6);

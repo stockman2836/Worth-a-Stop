@@ -8,6 +8,7 @@ import { updateLegend } from './map-symbols.mjs';
 import { placeList } from './place-list.mjs';
 import { territoryLabel } from './territory.mjs';
 import { placeName } from './place-name.mjs';
+import { watchNameTranslations } from './name-translations.mjs';
 
 const copy = {
   ru: { moreLoading: 'Загружаем остальные районы… Найденные места уже можно смотреть.', partial: 'Часть районов пока недоступна. Загруженные места показаны; повторите через минуту.', title: 'Места города', loading: 'Ищем границу города и интересные места…', empty: 'В границах города подходящих мест не найдено.',
@@ -79,7 +80,7 @@ export function placesPanel(city, language, signal, open, selection) {
   summary.setAttribute('aria-label', text.title + ' · ' + city.name);
   const status = document.createElement('p');
   status.setAttribute('role', 'status');
-  const listView = placeList(language, text, () => itinerary, index => { route.focused = false; map?.select(index); }, selection?.placePage, selection?.allPlaces);
+  const listView = placeList(language, text, () => itinerary, index => { route.focused = false; map?.select(index); }, selection?.placePage, selection?.allPlaces, signal);
   const list = listView.element;
   const mapBox = document.createElement('div');
   mapBox.className = 'places-map';
@@ -114,6 +115,12 @@ export function placesPanel(city, language, signal, open, selection) {
   let itinerary;
   let onTimeChange;
   let loadedPlaces = [];
+  watchNameTranslations(target => {
+    if (target !== language) return;
+    listView.refreshNames();
+    map?.setPlaces(loadedPlaces);
+    itinerary?.setPlaceNames(loadedPlaces);
+  }, signal);
   const mapControls = document.createElement('div'); mapControls.className = 'map-discovery-controls';
   const guide = document.createElement('p'); guide.textContent = text.mapGuide;
   const eventToggle = document.createElement('input'); eventToggle.type = 'checkbox'; eventToggle.checked = selection?.mapEvents ?? false;

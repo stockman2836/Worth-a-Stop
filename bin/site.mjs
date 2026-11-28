@@ -7,8 +7,11 @@ import { createPlaceSearch } from '../src/place-search.mjs';
 import { createPlaceCache } from '../src/place-cache.mjs';
 import { fileURLToPath } from 'node:url';
 import { createWalkingRouter } from '../src/walking-router.mjs';
+import { createNameTranslator } from '../src/name-translator.mjs';
 
 const assets = new Map([
+  ['/name-translations.mjs', ['../web/name-translations.mjs', 'text/javascript']],
+  ['/name-translation.mjs', ['../src/name-translation.mjs', 'text/javascript']],
   ['/travel-interests.mjs', ['../src/travel-interests.mjs', 'text/javascript']],
   ['/place-name.mjs', ['../src/place-name.mjs', 'text/javascript']],
   ['/basemap.mjs', ['../web/basemap.mjs', 'text/javascript']],
@@ -79,7 +82,29 @@ const assets = new Map([
 const searchPlaces = createPlaceSearch({ diskCache: process.env.PLACE_CACHE_DIR === 'off' ? undefined :
   createPlaceCache(process.env.PLACE_CACHE_DIR || fileURLToPath(new URL('../.cache/places', import.meta.url))) });
 const walkingRoute = createWalkingRouter();
+const translateNames = createNameTranslator({ cache: process.env.PLACE_CACHE_DIR === 'off' ? undefined :
+  createPlaceCache(fileURLToPath(new URL('../.cache/translations', import.meta.url)), { limit: 3000 }) });
 const server = createServer(async (request, response) => {
+  if (request.method === 'POST' && request.url === '/api/name-translations') {
+    let input;
+    try {
+      let bytes = 0; const chunks = [];
+      for await (const chunk of request.iterator({ destroyOnReturn: false })) {
+        bytes += chunk.length; if (bytes > 4096) { request.resume(); throw Error('Too large'); } chunks.push(chunk);
+      }
+      input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      if (!['ru', 'en'].includes(input.target) || !Array.isArray(input.items) || !input.items.length || input.items.length > 4 ||
+          input.items.some(item => !item || !['en', 'autodetect'].includes(item.source) || typeof item.text !== 'string' ||
+            !item.text.trim() || item.text.length > 150 || /[\u0000-\u001f]/.test(item.text))) throw Error('Invalid names');
+    } catch { response.writeHead(400).end(); return; }
+    const controller = new AbortController();
+    response.once('close', () => { if (!response.writableEnded) controller.abort(); });
+    try {
+      const result = await translateNames(input.items, input.target, controller.signal);
+      if (!response.destroyed) response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify(result));
+    } catch { if (!response.destroyed) response.writeHead(200, { 'Content-Type': 'application/json' }).end('{"translations":[]}'); }
+    return;
+  }
   if (request.method === 'GET' && request.url.startsWith('/api/walking?')) {
     const params = new URLSearchParams(request.url.slice('/api/walking?'.length));
     const values = ['fromLat', 'fromLon', 'toLat', 'toLon'].map(key => params.get(key));

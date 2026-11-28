@@ -35,11 +35,11 @@ export async function browserHarness(t) {
       }
     });
     const server = spawn(process.execPath, ['bin/site.mjs'], { cwd: new URL('../', import.meta.url),
-      env: { ...process.env, PORT: '0', PLACE_CACHE_DIR: 'off' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      env: { ...process.env, PORT: process.env.BROWSER_TEST_PORT || '0', PLACE_CACHE_DIR: 'off' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
     children.push(server);
     const address = await output(server, 'stdout', /(http:\/\/127\.0\.0\.1:\d+)/);
     const browser = spawn(process.env.CHROME_BIN, ['--headless=new', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-gpu-sandbox', '--no-first-run',
-      '--remote-debugging-port=0', '--user-data-dir=' + profile, 'about:blank'],
+      '--remote-debugging-port=' + (process.env.BROWSER_DEBUG_PORT || '0'), '--user-data-dir=' + profile, 'about:blank'],
     { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
     children.push(browser);
     const browserSocket = new URL(await output(browser, 'stderr', /DevTools listening on (ws:\/\/\S+)/));
@@ -65,7 +65,11 @@ export async function browserHarness(t) {
         // Use the actual server response, but avoid headless Chrome's local
         // network permission policy blocking random loopback module requests.
         assets = assets.then(async () => {
-          const response = await fetch(message.params.request.url, { signal: AbortSignal.timeout(4000) });
+          const request = message.params.request;
+          const response = await fetch(request.url, { method: request.method,
+            ...(request.postData !== undefined && { body: request.postData }),
+            headers: request.headers['Content-Type'] ? { 'Content-Type': request.headers['Content-Type'] } : {},
+            signal: AbortSignal.timeout(request.url.includes('/api/name-translations') ? 18000 : 4000) });
           await call('Fetch.fulfillRequest', { requestId: message.params.requestId, responseCode: response.status,
             responseHeaders: [{ name: 'Content-Type', value: response.headers.get('Content-Type') || 'application/octet-stream' }],
             body: Buffer.from(await response.arrayBuffer()).toString('base64') });

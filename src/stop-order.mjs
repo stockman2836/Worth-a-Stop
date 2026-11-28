@@ -40,6 +40,7 @@ export async function compareStopOrder(stops, id, legs, start, timeZone, { signa
     if (!moved && original.arrival === visit.arrival && original.departure === visit.departure) return true;
     if (visit.stop.type === 'place') return visit.hours === 'fits';
     if (visit.stop.type === 'return') return visit.arrival !== null && !visit.reason && visit.late === 0;
+    if (visit.stop.type === 'pause') return visit.arrival !== null && !visit.reason && visit.late === 0;
     return visit.arrival !== null && Number.isFinite(visit.stop.start) && visit.late === 0 && visit.reason !== 'event-ended';
   });
   return { before, after, applicable };

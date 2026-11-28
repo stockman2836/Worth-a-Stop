@@ -27,6 +27,16 @@ export function arrivalTimes(stops, legs, start) {
         if (Number.isInteger(stop.duration) && stop.duration >= 1 && stop.duration <= 1440) {
           departure = arrival + stop.duration * 60000;
         } else reason = 'visit-duration';
+      } else if (stop.type === 'pause') {
+        if (!Number.isFinite(stop.start) || !Number.isFinite(stop.end) || stop.end <= stop.start ||
+            !Number.isInteger(stop.duration) || stop.duration < 5 || stop.duration > 180) reason = 'pause-duration';
+        else {
+          visitStart = Math.max(arrival, stop.start);
+          waiting = Math.ceil(Math.max(0, stop.start - arrival) / 60000);
+          departure = visitStart + stop.duration * 60000;
+          late = Math.ceil(Math.max(0, departure - stop.end) / 60000);
+          if (late) reason = 'pause-window';
+        }
       } else if (!Number.isFinite(stop.start)) {
         reason = 'event-time';
       } else {

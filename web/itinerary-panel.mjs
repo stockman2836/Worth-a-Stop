@@ -16,6 +16,9 @@ import { withTripEndpoints } from './return-trip.mjs';
 
 const copy = {
   ru: { title: 'План дня', date: 'Дата плана', add: 'Добавить в план', empty: 'Добавьте места и события из подборки.',
+    pauseMinutes: 'Длительность паузы, мин', pauseStart: 'Начало паузы', pauseLate: 'Окончание позже окна на',
+    pauseNote: 'Резерв времени рядом с отмеченной точкой. Место для паузы не подобрано; поиск и дополнительные переходы не рассчитаны.',
+    pauseWindow: 'Окно паузы',
     saved: 'План сохранён на этом устройстве.', temporary: 'Не удалось сохранить план. Изменения доступны в текущей вкладке.',
     added: 'Остановка добавлена в план.', duplicate: 'Эта остановка уже в плане.', up: 'Выше', down: 'Ниже', remove: 'Убрать',
     minutes: 'Время посещения, мин', unknown: 'Время события не указано', invalid: 'Укажите от 1 до 1440 минут.',
@@ -43,11 +46,14 @@ const copy = {
     conflicts: count => `Конфликтов с часами работы — ${count}.`,
     replaced: 'Остановка заменена. Переходы и расписание пересчитываются.',
     reordered: 'Порядок применён. Переходы и расписание пересчитываются.',
-    reasons: { 'start-time': 'Не задано время старта.', 'previous-stop': 'Неизвестно время ухода с предыдущей остановки.',
+    reasons: { 'pause-window': 'Пауза не помещается в выбранное окно времени.', 'pause-duration': 'Укажите длительность паузы от 5 до 180 минут.', 'start-time': 'Не задано время старта.', 'previous-stop': 'Неизвестно время ухода с предыдущей остановки.',
       'walking-leg': 'Нужен рассчитанный пеший переход.', 'visit-duration': 'Укажите длительность посещения.',
       'event-time': 'Время начала события неизвестно.', 'event-end': 'Время окончания события неизвестно.',
       'event-ended': 'Событие закончится до прибытия. Проверьте план.' } },
   en: { title: 'Daily itinerary', date: 'Plan date', add: 'Add to plan', empty: 'Add places and events from the suggestions.',
+    pauseMinutes: 'Break duration, min', pauseStart: 'Break starts', pauseLate: 'Break ends beyond its window by',
+    pauseNote: 'Time reserved near the marked point. No venue is selected; finding one and extra walking are not calculated.',
+    pauseWindow: 'Break window',
     saved: 'Plan saved on this device.', temporary: 'Could not save the plan. Changes are available in this tab.',
     added: 'Stop added to the plan.', duplicate: 'This stop is already in the plan.', up: 'Move up', down: 'Move down', remove: 'Remove',
     minutes: 'Visit duration, min', unknown: 'Event time unspecified', invalid: 'Enter 1 to 1440 minutes.',
@@ -75,7 +81,7 @@ const copy = {
     conflicts: count => `Opening-hour conflicts — ${count}.`,
     replaced: 'Stop replaced. Recalculating walking legs and schedule.',
     reordered: 'Order applied. Recalculating walking legs and schedule.',
-    reasons: { 'start-time': 'Start time unspecified.', 'previous-stop': 'Previous departure time is unknown.',
+    reasons: { 'pause-window': 'The break does not fit its selected time window.', 'pause-duration': 'Choose a break duration from 5 to 180 minutes.', 'start-time': 'Start time unspecified.', 'previous-stop': 'Previous departure time is unknown.',
       'walking-leg': 'A calculated walking leg is needed.', 'visit-duration': 'Enter the visit duration.',
       'event-time': 'Event start time is unknown.', 'event-end': 'Event end time is unknown.',
       'event-ended': 'The event ends before arrival. Check the plan.' } },
@@ -227,10 +233,11 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
       const info = item.querySelector('.stop-timing');
       info.dataset.reason = time.reason || '';
       info.textContent = [time.arrival !== null && text.arrival + ' · ' + when.format(time.arrival),
+        currentStops[index].type === 'pause' && time.visitStart !== null && text.pauseStart + ' · ' + when.format(time.visitStart),
         time.departure !== null && text.departure + ' · ' + when.format(time.departure),
         time.waiting > 0 && text.waiting + ' · ' + minutes.format(time.waiting),
-        time.late > 0 && text.late + ' · ' + minutes.format(time.late),
-        time.reason && text.reasons[time.reason]].filter(Boolean).join(' · ');
+        time.late > 0 && (currentStops[index].type === 'pause' ? text.pauseLate : text.late) + ' · ' + minutes.format(time.late),
+        time.reason && !(currentStops[index].type === 'pause' && time.late > 0) && text.reasons[time.reason]].filter(Boolean).join(' · ');
       if (currentStops[index].type === 'place') {
         const check = visitOpeningState(currentStops[index].hours, time.arrival, time.departure, city.timezone);
         const warning = item.querySelector('.visit-hours');
@@ -322,40 +329,49 @@ export function itineraryPanel(city, language, timeline, storage, signal, onExpl
           (stop.end === null ? '' : ' – ' + when.format(stop.end));
         item.append(time);
       } else {
-        const hours = document.createElement('p');
-        hours.className = 'saved-hours';
-        hours.textContent = stop.hours ? text.hours + ' · ' + stop.hours : '';
-        const warning = document.createElement('p');
-        warning.className = 'visit-hours';
-        item.append(hours, warning);
+        if (stop.type === 'pause') {
+          const detail = document.createElement('p'); detail.className = 'pause-description';
+          detail.textContent = `${text.pauseWindow}: ${when.format(stop.start)} – ${when.format(stop.end)}. ${text.pauseNote}`;
+          item.append(detail);
+        } else {
+          const hours = document.createElement('p');
+          hours.className = 'saved-hours';
+          hours.textContent = stop.hours ? text.hours + ' · ' + stop.hours : '';
+          const warning = document.createElement('p');
+          warning.className = 'visit-hours';
+          item.append(hours, warning);
+        }
         const label = document.createElement('label');
         label.className = 'day-picker';
         const input = document.createElement('input');
         input.type = 'number';
-        input.min = '1';
-        input.max = '1440';
+        input.min = stop.type === 'pause' ? '5' : '1';
+        input.max = stop.type === 'pause' ? '180' : '1440';
+        input.required = stop.type === 'pause';
         input.step = '1';
         input.value = stop.duration ?? '';
-        label.append(text.minutes, input);
+        label.append(stop.type === 'pause' ? text.pauseMinutes : text.minutes, input);
         input.addEventListener('change', () => {
-          if (!input.validity.valid) { status.textContent = text.invalid; return; }
+          if (!input.validity.valid) { status.textContent = stop.type === 'pause' ? text.reasons['pause-duration'] : text.invalid; return; }
           render(store.duration(activeDay, stop.id, input.value ? Number(input.value) : null));
         });
         item.append(label);
-        const alternatives = alternativesPanel(stop, language, city.timezone, replacementContext,
-          (context, id, replacement) => {
-            if (context.day !== activeDay || readStart() !== startInput.value) throw Error('Plan changed');
-            render(store.replace(activeDay, id, replacement, context.savedStops), text.replaced);
-          }, timeline, storage, AbortSignal.any([signal, replacementController.signal]));
-        alternativePanels.push(alternatives);
-        item.append(alternatives.element);
-        if (result.stops[index + 1]?.type === 'place') {
-          const order = orderPanel(stop.id, language, city.timezone, replacementContext, (context, id) => {
-            if (context.day !== activeDay || readStart() !== startInput.value) throw Error('Plan changed');
-            render(store.swapAdjacent(activeDay, id, context.savedStops), text.reordered);
-          }, AbortSignal.any([signal, replacementController.signal]));
-          alternativePanels.push(order);
-          item.append(order.element);
+        if (stop.type === 'place') {
+          const alternatives = alternativesPanel(stop, language, city.timezone, replacementContext,
+            (context, id, replacement) => {
+              if (context.day !== activeDay || readStart() !== startInput.value) throw Error('Plan changed');
+              render(store.replace(activeDay, id, replacement, context.savedStops), text.replaced);
+            }, timeline, storage, AbortSignal.any([signal, replacementController.signal]));
+          alternativePanels.push(alternatives);
+          item.append(alternatives.element);
+          if (result.stops[index + 1]?.type === 'place') {
+            const order = orderPanel(stop.id, language, city.timezone, replacementContext, (context, id) => {
+              if (context.day !== activeDay || readStart() !== startInput.value) throw Error('Plan changed');
+              render(store.swapAdjacent(activeDay, id, context.savedStops), text.reordered);
+            }, AbortSignal.any([signal, replacementController.signal]));
+            alternativePanels.push(order);
+            item.append(order.element);
+          }
         }
       }
       const actions = document.createElement('div');

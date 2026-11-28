@@ -5,9 +5,15 @@ import { localInstant } from './opening-hours.mjs';
 import { validReturnTrip, withTripEndpoints } from './return-trip.mjs';
 import { iconLabel } from './icons.mjs';
 import { interestIds, interestKey, normalizeInterests, readInterests, saveInterests } from './travel-interests.mjs';
+import { pauseControls } from './pause-controls.mjs';
+import { pauseWindow } from './planned-pause.mjs';
 
 const copy = {
   ru: { pace: 'Темп прогулки', paces: { relaxed: 'Спокойный', balanced: 'Обычный', active: 'Насыщенный' },
+    pauseInvalid: 'Пауза должна целиком помещаться в выбранное окно и оставлять время до окончания прогулки или возвращения.',
+    pauseEmpty: 'Не удалось собрать прогулку с паузой в указанное время и соблюдением срока возвращения. Измени окно, длительность или время поездки.',
+    pauseNote: 'Пауза — резерв времени рядом с отмеченной точкой. Заведение, его часы работы, поиск и дополнительные переходы не проверены.',
+    pauseDuration: n => `Пауза: ${n} мин`,
     returnPoint: 'Выбери точку возвращения: точку старта или другую точку на карте.',
     returnBuffer: 'Укажи запас от 0 до 120 минут и оставь время на прогулку до отправления.',
     returnTitle: 'Возвращение', returnEmpty: 'Не удалось подобрать прогулку с подтверждённым возвращением вовремя. Измени время или точку возвращения.',
@@ -35,6 +41,10 @@ const copy = {
     skipped: 'Некоторые события пропущены: неподходящее время, отсутствие данных или недоступный сеанс.',
     map: 'Предложение на карте', mapHint: 'Пунктир и оранжевые номера на карте — предлагаемый маршрут.', stops: 'Остановки предложения' },
   en: { pace: 'Walking pace', paces: { relaxed: 'Relaxed', balanced: 'Balanced', active: 'Active' },
+    pauseInvalid: 'The entire break must fit its window and leave time before the walk ends or the required return.',
+    pauseEmpty: 'No walk fits the requested break and return deadline. Change the break window, duration or trip times.',
+    pauseNote: 'The break reserves time at the marked point. A venue, its opening hours, the search and any extra walking are not verified.',
+    pauseDuration: n => `Break: ${n} min`,
     returnPoint: 'Choose a return point: your starting point or another point on the map.',
     returnBuffer: 'Choose a buffer from 0 to 120 minutes and leave time for the walk before departure.',
     returnTitle: 'Return', returnEmpty: 'No walk with a verified return before the deadline could be built. Change the time or return point.',
@@ -99,7 +109,8 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
     resetInterests.disabled = !getInterests().length;
   }
   showInterestNote();
-  controls.append(interestsBox, paceLabel, run, cancel);
+  const pause = pauseControls(city, language, storage, signal, () => itinerary.context().day, invalidate);
+  controls.append(interestsBox, pause.element, paceLabel, run, cancel);
   const element = document.createElement('section'); element.className = 'auto-plan-preview'; element.hidden = true;
   const heading = document.createElement('h2'); heading.textContent = text.title;
   const message = document.createElement('p'); message.setAttribute('role', 'status');
@@ -113,7 +124,7 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
   element.append(heading, message, note, list, actions, mapHint);
   const clock = new Intl.DateTimeFormat(language, { timeZone: city.timezone || 'UTC', hour: '2-digit', minute: '2-digit' });
   let active, proposal, expected, signature;
-  const fingerprint = () => JSON.stringify([itinerary.context(), pace.value, getInterests()]);
+  const fingerprint = () => JSON.stringify([itinerary.context(), pace.value, getInterests(), pause.value()]);
   function clear() {
     active?.abort(); active = undefined; proposal = expected = signature = undefined;
     timeline.clearDraft(); list.replaceChildren(); actions.hidden = true; note.textContent = ''; mapHint.hidden = true;
@@ -123,7 +134,7 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
     if (!signature || fingerprint() === signature) return;
     clear(); element.hidden = false; message.textContent = text.changed;
   }
-  itinerary.onChange(invalidate);
+  itinerary.onChange(() => { pause.refreshDay(); invalidate(); });
   function changeInterests() { preferences = saveInterests(getInterests(), storage); showInterestNote(); invalidate(); }
   for (const input of checkboxes.values()) input.addEventListener('change', changeInterests);
   resetInterests.addEventListener('click', () => { for (const input of checkboxes.values()) input.checked = false; changeInterests(); });
@@ -155,36 +166,40 @@ export function autoPlanPanel(city, language, itinerary, timeline, storage, sign
       return;
     }
     const interests = getInterests();
+    const pauseSettings = pause.value();
+    try { pauseWindow(pauseSettings, context.day, city.timezone, start, end - (context.returnTrip?.bufferMinutes || 0) * 60000); }
+    catch { message.textContent = text.pauseInvalid; pause.focus(); return; }
     expected = context; signature = fingerprint();
     const controller = new AbortController(); active = controller;
     const combined = AbortSignal.any([signal, controller.signal, AbortSignal.timeout(90000)]);
     run.disabled = true; cancel.hidden = false; message.textContent = text.gathering; message.setAttribute('aria-busy', 'true');
     try {
       const candidates = await loadPlanCandidates(city, context.day, { signal: combined, storage });
-      const result = await generateDayPlan({ ...context, timeZone: city.timezone, pace: pace.value, interests, ...candidates }, {
+      const result = await generateDayPlan({ ...context, timeZone: city.timezone, pace: pace.value, interests, pause: pauseSettings, ...candidates }, {
         signal: combined, onProgress: progress => { if (active === controller) message.textContent = text.checking(progress.stops); },
       });
       if (active !== controller || signal.aborted) return;
       if (signature !== fingerprint()) { invalidate(); return; }
       proposal = result;
       if (!result.stops.length) {
-        message.textContent = context.returnTrip ? text.returnEmpty : text.empty;
+        message.textContent = pauseSettings ? text.pauseEmpty : context.returnTrip ? text.returnEmpty : text.empty;
         note.textContent = [(candidates.incomplete || result.failedRoutes || result.limited) && text.partial, result.skippedEvents > 0 && text.skipped].filter(Boolean).join(' ');
         return;
       }
       message.textContent = text.summary(result.stops.length, result.walkingMinutes, clock.format(result.finish));
       note.textContent = [text.unchanged, text.estimates, !context.origin && text.firstStop,
+        result.pause && text.pauseNote,
         result.returnTrip && text.returnNote(clock.format(result.returnTrip.arrival), clock.format(result.returnTrip.deadline), result.returnTrip.bufferMinutes),
         (candidates.incomplete || result.failedRoutes || result.limited) && text.partial,
         candidates.stalePlaces && text.stale, result.unverifiedHours > 0 && text.unknown, result.skippedEvents > 0 && text.skipped,
         interests.length && !result.entries.some(entry => entry.interests.length) && text.noInterestMatches].filter(Boolean).join(' ');
       for (const entry of result.entries) {
         const item = document.createElement('li');
-        const time = document.createElement('span'); time.className = 'event-time'; time.textContent = clock.format(entry.stop.type === 'event' ? entry.stop.start : entry.arrival) + '–' + clock.format(entry.departure);
+        const time = document.createElement('span'); time.className = 'event-time'; time.textContent = clock.format(entry.stop.type === 'event' ? entry.stop.start : entry.stop.type === 'pause' ? entry.visitStart : entry.arrival) + '–' + clock.format(entry.departure);
         const link = document.createElement('a'); link.href = entry.stop.url; link.textContent = placeName(entry.stop, language);
         const reason = document.createElement('p');
         reason.dataset.hours = entry.hours;
-        reason.textContent = [entry.hours === 'event' ? text.event : entry.hours === 'fits' ? text.verified : text.unknown,
+        reason.textContent = [entry.hours === 'pause' ? text.pauseDuration(entry.stop.duration) : entry.hours === 'event' ? text.event : entry.hours === 'fits' ? text.verified : text.unknown,
           entry.stop.type === 'place' && text.duration(entry.stop.duration), entry.walkingMinutes > 0 && text.walk(entry.walkingMinutes),
           entry.waiting > 0 && text.arrive(clock.format(entry.arrival)), entry.waiting > 0 && text.wait(entry.waiting),
           entry.variety && entry.stop.type === 'place' && text.variety,

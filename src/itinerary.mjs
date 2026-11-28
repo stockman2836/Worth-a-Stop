@@ -2,8 +2,10 @@ import { nextDate } from './day-agenda.mjs';
 import { eventLocation } from './event-location.mjs';
 import { itineraryMemory as memory } from './city-plan-state.mjs';
 import { validTerritory } from './territory.mjs';
+import { plannedPause } from './planned-pause.mjs';
 
 export function itineraryStop(item, type) {
+  if (type === 'pause') return plannedPause({ kind: item.pauseKind, start: item.start, end: item.end, duration: item.duration }, item.location);
   const title = item.title || item.name;
   const url = new URL(item.url);
   if (!['place', 'event'].includes(type) || typeof title !== 'string' || !title.trim() || !['http:', 'https:'].includes(url.protocol) || url.username || url.password) {
@@ -107,7 +109,11 @@ export function itineraryStore(cityId, storage) {
     },
     duration(day, id, value) {
       if (value !== null && (!Number.isInteger(value) || value < 1 || value > 1440)) throw Error('Invalid duration');
-      return change(day, stops => stops.map(stop => stop.id === id && stop.type === 'place' ? { ...stop, duration: value } : stop));
+      return change(day, stops => stops.map(stop => {
+        if (stop.id !== id || !['place', 'pause'].includes(stop.type)) return stop;
+        if (stop.type === 'pause') return itineraryStop({ ...stop, duration: value }, 'pause');
+        return { ...stop, duration: value };
+      }));
     },
   };
 }

@@ -3,10 +3,12 @@ export const itineraryMemory = new Map();
 export const originMemory = new Map();
 export const timeMemory = new Map();
 export const returnMemory = new Map();
+export const pauseMemory = new Map();
 
 export function resetCityPlans(cityId, storage) {
   if (!Number.isSafeInteger(cityId) || cityId < 1) throw Error('Invalid city');
   const prefixes = ['v1', 'origin.v1', 'start.v1', 'end.v1', 'return.v1'].map(kind => `worth-a-stop.itinerary.${kind}.${cityId}.`);
+  prefixes.push(`worth-a-stop.auto-plan.pause.v1.${cityId}.`);
   const exact = [`worth-a-stop.itinerary.day.${cityId}`, `worth-a-stop.auto-plan.pace.${cityId}`];
   const matches = key => typeof key === 'string' && (exact.includes(key) || prefixes.some(prefix => key.startsWith(prefix)));
   if (storage) {
@@ -36,7 +38,7 @@ export function resetCityPlans(cityId, storage) {
       throw Object.assign(Error('City reset failed', { cause: error }), { partial });
     }
   }
-  for (const memory of [itineraryMemory, originMemory, timeMemory, returnMemory]) {
+  for (const memory of [itineraryMemory, originMemory, timeMemory, returnMemory, pauseMemory]) {
     for (const key of memory.keys()) if (matches(key)) memory.delete(key);
   }
   return { saved: Boolean(storage) };

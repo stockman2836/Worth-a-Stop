@@ -57,6 +57,12 @@ test('map lifecycle preserves wheel zoom, localized vector styles, theme, attrib
       if (!box.querySelector('.return-marker[title="Return point"]')) throw Error('Return point must have its own map flag');
       localized.setDestination(null);
       if (box.querySelector('.return-marker')) throw Error('Disabling return must remove its map flag');
+      const breakStop = { type: 'pause', name: 'Break', title: 'Break', names: {}, url: 'https://www.openstreetmap.org/', location: city };
+      localized.setRoute([], [breakStop]);
+      if (!box.querySelector('.pause-stop')) throw Error('Applied breaks need their own non-venue marker');
+      localized.previewPlan([], [breakStop]);
+      if (!box.querySelector('.pause-stop.draft-stop')) throw Error('Proposed breaks need their own map marker');
+      localized.clearPreview(); localized.setRoute([], []);
       let vector; leaflet.eachLayer(layer => { if (layer.getMaplibreMap) vector = layer.getMaplibreMap(); });
       const ruExpression = JSON.stringify(vector.getLayoutProperty('names', 'text-field'));
       document.documentElement.dataset.theme = 'dark';

@@ -1,5 +1,5 @@
 export const iconNames = ['arrow-down', 'arrow-left', 'arrow-right', 'arrow-up', 'binoculars', 'calendar-days', 'castle', 'check',
-  'church', 'drama', 'flag', 'landmark', 'map-pin', 'moon', 'palette', 'plus', 'route', 'search',
+  'church', 'drama', 'flag', 'landmark', 'map-pin', 'moon', 'palette', 'pause', 'plus', 'route', 'search',
   'shopping-basket', 'sparkles', 'sun', 'trash-2', 'trees', 'undo-2', 'x'];
 
 export function icon(name) {

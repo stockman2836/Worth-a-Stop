@@ -10,6 +10,8 @@ import { createWalkingRouter } from '../src/walking-router.mjs';
 import { createNameTranslator } from '../src/name-translator.mjs';
 
 const assets = new Map([
+  ['/pause-controls.mjs', ['../web/pause-controls.mjs', 'text/javascript']],
+  ['/planned-pause.mjs', ['../src/planned-pause.mjs', 'text/javascript']],
   ['/return-trip-panel.mjs', ['../web/return-trip-panel.mjs', 'text/javascript']],
   ['/return-trip.mjs', ['../src/return-trip.mjs', 'text/javascript']],
   ['/diagnostics.mjs', ['../web/diagnostics.mjs', 'text/javascript']],

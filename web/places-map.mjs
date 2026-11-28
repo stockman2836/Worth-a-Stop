@@ -251,6 +251,15 @@ export function placesMap(container, city, places, labels, onSelect, view) {
     }
   }
   container.addEventListener('keydown', keydown);
+  function pauseMarker(stop, number, draft = false) {
+    const popup = document.createElement('div'), title = document.createElement('a'), note = document.createElement('p');
+    title.href = stop.url; title.textContent = nameFor(stop);
+    note.textContent = labels.language === 'ru' ? 'Ориентир для паузы. Место не подобрано; поиск и дополнительные переходы не рассчитаны.'
+      : 'Reference point for a break. No venue selected; searching and extra walking are not calculated.';
+    popup.append(title, note);
+    const icon = L.divIcon({ className: 'route-stop pause-stop' + (draft ? ' draft-stop' : ''), html: markerFace('pause'), iconSize: [24, 24], iconAnchor: [-16, 12] });
+    return L.marker([stop.location.latitude, stop.location.longitude], { icon, title: `${number} · ${nameFor(stop)}`, alt: nameFor(stop), zIndexOffset: 1900 }).bindPopup(popup);
+  }
   function refreshNames() {
     for (const [marker, item] of namedMarkers) {
       decorate(marker, item);
@@ -307,6 +316,7 @@ export function placesMap(container, city, places, labels, onSelect, view) {
       for (const stop of stops) {
         if (!stop.location) continue;
         points.push([stop.location.latitude, stop.location.longitude]);
+        if (stop.type === 'pause') { pauseMarker(stop, ++number, true).addTo(previewLayer); continue; }
         const content = document.createElement('a');
         content.href = stop.url;
         content.textContent = nameFor(stop);
@@ -340,13 +350,14 @@ export function placesMap(container, city, places, labels, onSelect, view) {
           color: '#16485c', weight: 5, opacity: .8, className: 'walking-route',
         }).addTo(routeLayer);
       }
-      for (const [index, stop] of stops.entries()) {
+      let visitNumber = 0;
+      for (const stop of stops) {
         if (!stop.location || stop.type === 'origin' || stop.type === 'return') continue;
+        if (stop.type === 'pause') { pauseMarker(stop, ++visitNumber).addTo(routeLayer); continue; }
         const popup = document.createElement('a');
         popup.href = stop.url;
         popup.textContent = nameFor(stop);
-        const offset = stops[0]?.type === 'origin' ? 1 : 0;
-        const icon = L.divIcon({ className: 'route-stop', html: String(index + 1 - offset), iconSize: [28, 28], iconAnchor: [14, 14] });
+        const icon = L.divIcon({ className: 'route-stop', html: String(++visitNumber), iconSize: [28, 28], iconAnchor: [14, 14] });
         L.marker([stop.location.latitude, stop.location.longitude], { icon, title: nameFor(stop), alt: nameFor(stop), zIndexOffset: 1500 })
           .bindPopup(popup).addTo(routeLayer);
       }

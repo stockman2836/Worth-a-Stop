@@ -5,6 +5,12 @@ export async function walkingLegs(stops, { signal, fetchResponse = fetch, onProg
     const from = stops[i - 1];
     const to = stops[i];
     let leg = { from, to, status: 'missing-location' };
+    if ((from.type === 'pause' || to.type === 'pause') && from.location && to.location &&
+        from.location.latitude === to.location.latitude && from.location.longitude === to.location.longitude) {
+      leg = { from, to, status: 'ok', distance: 0, duration: 0, geometry: { type: 'LineString',
+        coordinates: [[from.location.longitude, from.location.latitude], [to.location.longitude, to.location.latitude]] } };
+      legs.push(leg); onProgress([...legs]); continue;
+    }
     if (from.location && to.location) {
       try {
         const params = new URLSearchParams({

@@ -6,6 +6,7 @@ import { withStartingPoint } from './starting-point.mjs';
 import { eventLocation } from './event-location.mjs';
 import { interestIds, normalizeInterests, matchingInterests, shortlistPlaces } from './travel-interests.mjs';
 import { validReturnTrip, returnStop } from './return-trip.mjs';
+import { pauseWindow, plannedPause } from './planned-pause.mjs';
 
 const paces = { relaxed: { factor: 1.3, stops: 4, walk: 25 }, balanced: { factor: 1, stops: 6, walk: 35 }, active: { factor: .8, stops: 8, walk: 45 } };
 const visits = { museum: 75, gallery: 50, cathedral: 40, castle: 60, park: 35, garden: 35, viewpoint: 20, marketplace: 30 };
@@ -18,7 +19,7 @@ function distance(a, b) {
   return 12742 * Math.asin(Math.sqrt(Math.min(1, h)));
 }
 
-export async function generateDayPlan({ day, startTime, endTime, timeZone, pace = 'balanced', interests = [], origin = null, returnTrip = null, places = [], events = [] },
+export async function generateDayPlan({ day, startTime, endTime, timeZone, pace = 'balanced', interests = [], origin = null, returnTrip = null, pause = null, places = [], events = [] },
   { signal, fetchResponse = fetch, onProgress = () => {} } = {}) {
   const start = timeZone && localInstant(day, startTime, timeZone);
   const end = timeZone && localInstant(day, endTime, timeZone);
@@ -28,6 +29,7 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
   const returnDeadline = returnTrip ? end - returnTrip.bufferMinutes * 60000 : end;
   if (returnDeadline <= start) throw Error('Invalid planning options');
   const destination = returnTrip && returnStop(returnTrip.point, 'Return', returnDeadline);
+  const pauseOptions = pauseWindow(pause, day, timeZone, start, returnDeadline);
   signal?.throwIfAborted();
   const profile = paces[pace];
   interests = normalizeInterests(interests);
@@ -50,7 +52,7 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
   const pool = [...candidates.filter(c => c.stop.type === 'place'), ...candidates.filter(c => c.stop.type === 'event')
     .sort((a,b) => a.stop.start - b.stop.start).slice(0, 12)];
   const stops = [], entries = [], legs = [], categories = new Set(), routes = new Map();
-  let checks = 0, failedRoutes = 0, limited = false, finalReturn;
+  let checks = 0, failedRoutes = 0, limited = false, finalReturn, finalPause, visitCount = 0;
   async function legTo(from, to) {
     const key = JSON.stringify([from.location, to.location]);
     if (!routes.has(key)) {
@@ -67,33 +69,55 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
     const cached = await routes.get(key);
     return cached && { ...cached, from, to };
   }
-  async function evaluate(candidate) {
-    const trial = withStartingPoint([...stops, candidate.stop], origin, 'Start');
+  const pauseEntry = (stop, timing) => ({ stop, ...timing, hours: 'pause', walkingMinutes: 0, variety: false, interests: [] });
+  async function evaluateVariant(candidate, placement) {
+    const anchor = stops.at(-1) ?? (origin ? withStartingPoint([candidate.stop], origin, 'Start')[0] : null);
+    const before = placement === 'before' ? plannedPause(pauseOptions, anchor?.location ?? candidate.stop.location) : null;
+    const bridge = before && anchor ? (await walkingLegs([anchor, before], { signal, fetchResponse }))[0] : null;
+    const trial = withStartingPoint([...stops, ...(before ? [before] : []), candidate.stop], origin, 'Start');
     const from = trial.at(-2);
     const leg = from ? await legTo(from, candidate.stop) : null;
     if (from && !leg || leg && Math.ceil(leg.duration / 60) > profile.walk) return null;
     signal?.throwIfAborted();
-    const trialLegs = leg ? [...legs, leg] : legs;
-    const timing = arrivalTimes(trial, trialLegs, start).at(-1);
+    const trialLegs = [...legs, ...(bridge ? [bridge] : []), ...(leg ? [leg] : [])];
+    const times = arrivalTimes(trial, trialLegs, start);
+    const timing = times.at(-1), beforeTiming = before && times.at(-2);
+    if (beforeTiming && (beforeTiming.reason || beforeTiming.late > 0)) return null;
     if (timing.reason || timing.late > 0 || timing.departure > end || timing.waiting > 60) return null;
     const hours = candidate.stop.type === 'place' ? visitOpeningState(candidate.stop.hours, timing.arrival, timing.departure, timeZone).state : 'event';
     if (!['fits', 'unknown', 'event'].includes(hours)) return null;
+    let tail;
+    if (placement === 'after') {
+      const stop = plannedPause(pauseOptions, candidate.stop.location);
+      const pauseLeg = (await walkingLegs([candidate.stop, stop], { signal, fetchResponse }))[0];
+      const pauseTiming = arrivalTimes([...trial, stop], [...trialLegs, pauseLeg], start).at(-1);
+      if (pauseTiming.reason || pauseTiming.late > 0 || pauseTiming.departure > end) return null;
+      tail = { stop, leg: pauseLeg, timing: pauseTiming };
+    }
+    const departure = tail?.timing.departure ?? timing.departure;
     let back;
     if (destination) {
-      if (timing.departure > returnDeadline) return null;
-      const returnLeg = await legTo(candidate.stop, destination);
+      if (departure > returnDeadline) return null;
+      const returnLeg = await legTo(tail?.stop ?? candidate.stop, destination);
       signal?.throwIfAborted();
       if (!returnLeg || Math.ceil(returnLeg.duration / 60) > profile.walk) return null;
-      const arrival = timing.departure + Math.ceil(returnLeg.duration / 60) * 60000;
+      const arrival = departure + Math.ceil(returnLeg.duration / 60) * 60000;
       if (arrival > returnDeadline) return null;
       back = { stop: destination, leg: returnLeg, arrival, deadline: returnDeadline, bufferMinutes: returnTrip.bufferMinutes };
     }
     const walking = leg ? Math.ceil(leg.duration / 60) : 0;
     const variety = !categories.has(candidate.category);
     const score = (hours === 'fits' ? 12 : hours === 'event' ? 24 : 0) + (candidate.interests.length ? 12 : 0) + (variety ? 5 : 0) - walking * .2 - timing.waiting * .15 - candidate.order * .01;
-    return { candidate, leg, timing, hours, walking, variety, score, back };
+    return { candidate, leg, timing, hours, walking, variety, score, back, tail, before, beforeTiming, bridge };
   }
-  while (stops.length < profile.stops && pool.length) {
+  async function evaluate(candidate) {
+    if (!pauseOptions || stops.some(stop => stop.type === 'pause')) return evaluateVariant(candidate, 'none');
+    // Reserve a break after each trial visit; commit it before a later visit
+    // when it no longer fits afterward. Every trial already includes its cost.
+    const after = await evaluateVariant(candidate, 'after');
+    return after ?? evaluateVariant(candidate, 'before');
+  }
+  while (visitCount < profile.stops && pool.length) {
     signal?.throwIfAborted();
     const point = stops.at(-1)?.location || origin;
     const now = entries.at(-1)?.departure || start;
@@ -108,18 +132,25 @@ export async function generateDayPlan({ day, startTime, endTime, timeZone, pace 
       chosen = options.sort((a,b) => b.score - a.score)[0];
     }
     if (!chosen) break;
+    if (chosen.before) {
+      stops.push(chosen.before); if (chosen.bridge) legs.push(chosen.bridge); entries.push(pauseEntry(chosen.before, chosen.beforeTiming));
+    }
     stops.push(chosen.candidate.stop);
+    visitCount++;
     if (chosen.leg) legs.push(chosen.leg);
     finalReturn = chosen.back;
+    finalPause = chosen.tail;
     entries.push({ stop: chosen.candidate.stop, ...chosen.timing, hours: chosen.hours, walkingMinutes: chosen.walking, variety: chosen.variety, interests: chosen.candidate.interests });
     categories.add(chosen.candidate.category);
     pool.splice(pool.indexOf(chosen.candidate), 1);
-    onProgress({ stops: stops.length, routeChecks: checks });
+    onProgress({ stops: visitCount, routeChecks: checks });
   }
   signal?.throwIfAborted();
+  if (finalPause) { stops.push(finalPause.stop); legs.push(finalPause.leg); entries.push(pauseEntry(finalPause.stop, finalPause.timing)); }
   const routeLegs = finalReturn ? [...legs, finalReturn.leg] : legs;
   return { stops, entries, legs: routeLegs, start, end, finish: finalReturn?.arrival ?? entries.at(-1)?.departure ?? start,
     ...(returnTrip && { returnTrip: finalReturn ?? null }),
+    ...(pauseOptions && { pause: stops.find(stop => stop.type === 'pause') ?? null }),
     walkingMinutes: routeLegs.reduce((sum, leg) => sum + Math.ceil(leg.duration / 60), 0),
     interests, failedRoutes, limited, skippedEvents, unverifiedHours: entries.filter(entry => entry.hours === 'unknown').length };
 }

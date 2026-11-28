@@ -444,6 +444,10 @@ main { width: min(74rem, calc(100% - 4rem)); }
 .return-trip-fields { display: flex; flex-wrap: wrap; align-items: end; gap: .8rem; margin-top: .8rem; }
 .return-trip-fields select, .return-trip-fields button { font: inherit; font-size: .8rem; color: var(--ink); background: var(--surface-soft); border: 1px solid var(--line); border-radius: .5rem; padding: .65rem .8rem; min-height: 2.8rem; }
 .return-trip-fields[hidden] { display: none; }
+.pause-controls { flex-basis: 100%; margin: 0; }
+.pause-hint:empty { display: none; }
+.pause-stop { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning); }
+.pause-description { font-size: .8rem; color: var(--muted); line-height: 1.6; }
 .return-trip-status { font-size: .8rem; color: var(--muted); margin-bottom: 0; }
 .return-trip-status:empty { display: none; }
 .return-trip-status[data-state="late"], .return-trip-status[data-state="invalid"] { color: var(--danger); }
